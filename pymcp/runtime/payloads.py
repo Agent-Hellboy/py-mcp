@@ -9,10 +9,13 @@ from ..registries.registry import dump_value
 
 
 JSONRPC_VERSION = "2.0"
+PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
+SESSION_NOT_FOUND = -32001
+FORBIDDEN = -32003
 
 
 def success(rpc_id: Any, result: dict[str, Any]) -> dict[str, Any]:
@@ -81,11 +84,14 @@ def normalize_resource_result(uri: str, mime_type: str, value: Any) -> dict[str,
 
 
 __all__ = [
+    "FORBIDDEN",
     "INTERNAL_ERROR",
     "INVALID_PARAMS",
     "INVALID_REQUEST",
     "JSONRPC_VERSION",
     "METHOD_NOT_FOUND",
+    "PARSE_ERROR",
+    "SESSION_NOT_FOUND",
     "error_response",
     "normalize_prompt_result",
     "normalize_resource_result",

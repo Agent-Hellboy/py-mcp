@@ -29,9 +29,13 @@ async def handle_rpc_method(method, data, session_id, rpc_id, sessions):
         protocol_version=raw_session.get("protocol_version"),
         client_capabilities=raw_session.get("client_capabilities", {}),
         client_info=raw_session.get("client_info", {}),
-        lifecycle_state=SessionState.READY
-        if raw_session.get("initialized", False)
-        else SessionState.WAIT_INIT,
+        lifecycle_state=(
+            SessionState.READY
+            if raw_session.get("client_ready", False)
+            else SessionState.WAIT_INITIALIZED
+            if raw_session.get("initialized", False)
+            else SessionState.WAIT_INIT
+        ),
     )
     app.state.session_manager.attach_session(session)
     result = await process_jsonrpc_message(session_id, payload, app=app, direct_response=False)

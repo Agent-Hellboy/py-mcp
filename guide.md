@@ -2,6 +2,8 @@
 
 `py-mcp` keeps middleware separate from capability registration. Compression, CORS, and custom headers should be configured at the app edge, not inside the runtime dispatcher or the app-scoped registry/session layers.
 
+The default HTTP transport is Streamable HTTP mounted at `/mcp`. If you need local-process MCP, use the stdio runner from `pymcp.transport`.
+
 ## Basic setup
 
 ```python
@@ -75,4 +77,6 @@ Use that when you want to control what `initialize` advertises without changing 
 - Keep `MiddlewareConfig` in `config.py`
 - Keep capability registrations near the domain logic they wrap
 - Let `create_app()` assemble the app-scoped registry manager and session manager
+- Keep HTTP transport concerns inside the mounted `/mcp` endpoint
+- Use `run_stdio_server(app)` when embedding the server in a stdio-based host
 - Keep `run_server.py` thin

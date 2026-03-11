@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "py-sse-mcp"
 version = "0.2.0"
-description = "A capability-first MCP server toolkit for FastAPI with SSE compatibility"
+description = "A capability-first MCP server toolkit for FastAPI with Streamable HTTP and stdio transport"
 authors = [
     { name = "Prince Roshan", email = "princekrroshan01@gmail.com" }
 ]
@@ -20,3 +20,10 @@ license = {text = "MIT"}
 
 [project.urls]
 Homepage = "https://github.com/Agent-Hellboy/py-sse-mcp" 
+
+[tool.setuptools.packages.find]
+include = ["pymcp*"]
+exclude = ["company*"]
+
+[tool.ruff]
+extend-exclude = ["company"]

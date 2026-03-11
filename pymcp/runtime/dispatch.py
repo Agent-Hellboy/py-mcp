@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Awaitable, Callable, Protocol
+from typing import Awaitable, Protocol
 
 from fastapi import FastAPI
 
@@ -11,13 +11,15 @@ from ..session.store import SessionManager, get_session_manager
 from ..session.types import Session, SessionState
 from .handlers.registry import get_registered_handlers
 from .payloads import INVALID_REQUEST, JSONRPC_VERSION, METHOD_NOT_FOUND, INTERNAL_ERROR, error_response
-from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject, make_result
+from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject
 
 # Side-effect imports register built-in handlers.
 from .handlers import lifecycle as _lifecycle  # pylint: disable=unused-import
 from .handlers import prompts as _prompts  # pylint: disable=unused-import
 from .handlers import resources as _resources  # pylint: disable=unused-import
 from .tools import handlers as _tools  # pylint: disable=unused-import
+
+BUILTIN_HANDLER_MODULES = (_lifecycle, _prompts, _resources, _tools)
 
 
 class DispatchError(Exception):
@@ -61,6 +63,8 @@ class ErrorBoundaryMiddleware:
 
 
 class InitGateMiddleware:
+    _POST_INIT_ALLOWED = frozenset({"initialize", "notifications/initialized", "ping"})
+
     async def __call__(self, ctx: DispatchContext, call_next: DispatchNext) -> DispatchResponse:
         state = ctx.session.lifecycle_state
         if state == SessionState.CLOSED:
@@ -68,6 +72,10 @@ class InitGateMiddleware:
             await ctx.maybe_enqueue(payload)
             return DispatchResponse(status=404, json=True, payload=payload)
         if state == SessionState.WAIT_INIT and ctx.method != "initialize":
+            payload = error_response(ctx.rpc_id, INVALID_REQUEST, "server not initialized.")
+            await ctx.maybe_enqueue(payload)
+            return DispatchResponse(status=200, json=True, payload=payload)
+        if state == SessionState.WAIT_INITIALIZED and ctx.method not in self._POST_INIT_ALLOWED:
             payload = error_response(ctx.rpc_id, INVALID_REQUEST, "server not initialized.")
             await ctx.maybe_enqueue(payload)
             return DispatchResponse(status=200, json=True, payload=payload)

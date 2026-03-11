@@ -13,7 +13,8 @@ async def test_prompts_not_supported_when_registry_is_empty():
     app = create_app(middleware_config=None)
     manager = get_session_manager(app)
     session = manager.create_session()
-    manager.mark_initialized(session.session_id)
+    await manager.mark_initialize_started(session.session_id)
+    await manager.mark_initialized(session.session_id)
 
     result = await process_jsonrpc_message(
         session.session_id,
@@ -32,7 +33,8 @@ async def test_resources_supported_once_registered():
     app = create_app(middleware_config=None)
     manager = get_session_manager(app)
     session = manager.create_session()
-    manager.mark_initialized(session.session_id)
+    await manager.mark_initialize_started(session.session_id)
+    await manager.mark_initialized(session.session_id)
 
     result = await process_jsonrpc_message(
         session.session_id,

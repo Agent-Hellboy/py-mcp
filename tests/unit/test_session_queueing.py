@@ -26,6 +26,14 @@ async def test_dispatch_enqueues_response_for_session_stream():
     queued_init = json.loads(await session.queue.get())
     assert queued_init == init_result.payload
 
+    ready_result = await process_jsonrpc_message(
+        session.session_id,
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        app=app,
+        direct_response=False,
+    )
+    assert ready_result.payload is None
+
     list_result = await process_jsonrpc_message(
         session.session_id,
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},

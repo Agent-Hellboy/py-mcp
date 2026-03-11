@@ -16,7 +16,7 @@ async def handle_initialize(ctx: DispatchContext) -> DispatchResult:
     session.protocol_version = select_protocol_version(params.get("protocolVersion"), ctx.server_settings)
     session.client_capabilities = ensure_mapping(params.get("capabilities"))
     session.client_info = ensure_mapping(params.get("clientInfo"))
-    ctx.session_manager.mark_initialized(ctx.session_id)
+    await ctx.session_manager.mark_initialize_started(ctx.session_id)
 
     payload = success(
         ctx.rpc_id,
@@ -47,5 +47,5 @@ async def handle_ping(ctx: DispatchContext) -> DispatchResult:
 
 @rpc_method("notifications/initialized")
 async def handle_initialized_notification(ctx: DispatchContext) -> DispatchResult:
-    ctx.session_manager.mark_client_ready(ctx.session_id)
+    await ctx.session_manager.mark_initialized(ctx.session_id)
     return make_result(202, json_response=False, payload=None)

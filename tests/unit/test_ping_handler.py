@@ -27,7 +27,7 @@ async def test_ping_allowed_after_initialize():
     app = create_app(middleware_config=None)
     manager = get_session_manager(app)
     session = manager.create_session()
-    manager.mark_initialized(session.session_id)
+    await manager.mark_initialize_started(session.session_id)
 
     result = await process_jsonrpc_message(
         session.session_id,
