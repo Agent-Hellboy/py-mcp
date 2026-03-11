@@ -1,48 +1,43 @@
-"""
-Utility functions for the MCP framework.
-"""
+"""Compatibility helpers."""
 
-import json
-import logging
+from __future__ import annotations
 
-from .registry import tool_registry
+from fastapi import FastAPI
+
+from .runtime.dispatch import process_jsonrpc_message
+from .session.store import SessionManager
+from .session.types import Session, SessionState
+from .settings import ServerSettings
 
 
 async def handle_rpc_method(method, data, session_id, rpc_id, sessions):
-    """
-    Handle JSON-RPC methods for the MCP server.
-    """
-    queue = sessions[session_id]["queue"]
-    if method == "initialize":
-        sessions[session_id]["initialized"] = True
-        result = {
-            "jsonrpc": "2.0",
-            "id": rpc_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {"listChanged": True}},
-                "serverInfo": {"name": "mcpframework", "version": "1.0.0"},
-            },
-        }
-        await queue.put(json.dumps(result))
-    elif method == "tools/list":
-        tools_list = []
-        for tool_name, tool_info in tool_registry.get_tools().items():
-            tools_list.append(
-                {
-                    "name": tool_name,
-                    "description": tool_info["description"],
-                    "inputSchema": tool_info["inputSchema"],
-                    "prompt": tool_info.get("prompt", False),
-                }
-            )
-        result = {
-            "jsonrpc": "2.0",
-            "id": rpc_id,
-            "result": {"tools": tools_list, "count": len(tools_list)},
-        }
-        logging.debug(f"[TOOLS] Sending {len(tools_list)} tools to Cursor")
-        logging.debug(f"[TOOLS] Tool names: {[t['name'] for t in tools_list]}")
-        logging.debug(f"[TOOLS] Tool schemas: {json.dumps(tools_list, indent=2)}")
-        await queue.put(json.dumps(result))
+    """Compatibility shim for older imports.
 
+    This mirrors the old helper signature while delegating to the new dispatcher.
+    """
+    raw_session = sessions[session_id]
+    payload = {"jsonrpc": "2.0", "id": rpc_id, "method": method}
+    payload.update(data)
+    app = FastAPI()
+    app.state.server_settings = ServerSettings()
+    app.state.session_manager = SessionManager()
+    session = Session(
+        session_id=session_id,
+        queue=raw_session["queue"],
+        initialized=raw_session.get("initialized", False),
+        client_ready=raw_session.get("client_ready", False),
+        protocol_version=raw_session.get("protocol_version"),
+        client_capabilities=raw_session.get("client_capabilities", {}),
+        client_info=raw_session.get("client_info", {}),
+        lifecycle_state=SessionState.READY
+        if raw_session.get("initialized", False)
+        else SessionState.WAIT_INIT,
+    )
+    app.state.session_manager.attach_session(session)
+    result = await process_jsonrpc_message(session_id, payload, app=app, direct_response=False)
+    raw_session["initialized"] = session.initialized
+    raw_session["client_ready"] = session.client_ready
+    raw_session["protocol_version"] = session.protocol_version
+    raw_session["client_capabilities"] = session.client_capabilities
+    raw_session["client_info"] = session.client_info
+    return result.payload

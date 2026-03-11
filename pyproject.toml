@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py-sse-mcp"
-version = "0.1.0"
-description = "A Simple Framework for Creating an MCP Server using SSE protocol"
+version = "0.2.0"
+description = "A capability-first MCP server toolkit for FastAPI with SSE compatibility"
 authors = [
     { name = "Prince Roshan", email = "princekrroshan01@gmail.com" }
 ]
