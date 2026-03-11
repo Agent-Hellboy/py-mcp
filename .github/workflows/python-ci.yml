@@ -9,27 +9,36 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - python-version: '3.10'
             tox-env: py310
+            experimental: false
           - python-version: '3.11'
             tox-env: py311
+            experimental: false
           - python-version: '3.12'
             tox-env: py312
+            experimental: false
           - python-version: '3.13'
             tox-env: py313
+            experimental: false
           - python-version: '3.14'
             tox-env: py314
+            experimental: false
           - python-version: '3.15-dev'
             tox-env: py315
+            experimental: true
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: ${{ matrix.experimental }}
       - name: Install tox
         run: |
           python -m pip install --upgrade pip
