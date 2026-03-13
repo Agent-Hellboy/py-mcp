@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymcp-kit"
-version = "0.2.0"
+version = "0.1.0"
 description = "A capability-first MCP server toolkit for FastAPI with Streamable HTTP and stdio transport"
 authors = [
     { name = "Prince Roshan", email = "princekrroshan01@gmail.com" }

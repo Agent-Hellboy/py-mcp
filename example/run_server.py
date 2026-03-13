@@ -67,7 +67,7 @@ if __name__ == "__main__":
         middleware_config=middleware_config,
         server_settings=ServerSettings(
             name="example-server",
-            version="0.2.0",
+            version="0.1.0",
             capabilities=CapabilitySettings(
                 advertise_empty_prompts=False,
                 advertise_empty_resources=False,

@@ -1,0 +1,7 @@
+[run]
+source = pymcp
+
+[report]
+omit =
+    tests/*
+    company/*

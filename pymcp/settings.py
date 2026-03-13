@@ -26,7 +26,7 @@ class CapabilitySettings:
 @dataclass(slots=True)
 class ServerSettings:
     name: str = "pymcp-kit"
-    version: str = "0.2.0"
+    version: str = "0.1.0"
     protocol_versions: tuple[str, ...] = SUPPORTED_PROTOCOL_VERSIONS
     capabilities: CapabilitySettings = field(default_factory=CapabilitySettings)
 
