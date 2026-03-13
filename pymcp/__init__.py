@@ -1,4 +1,4 @@
-"""Public package API for py-mcp."""
+"""Public package API for PyMCP Kit."""
 
 from .runtime.server import create_app
 from .registry import prompt_registry, resource_registry, tool_registry

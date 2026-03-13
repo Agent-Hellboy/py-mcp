@@ -18,9 +18,9 @@ def create_app(
     server_settings: Optional[ServerSettings] = None,
     **kwargs,
 ):
-    app = FastAPI(title="py-mcp", summary="Composable MCP server on FastAPI")
+    app = FastAPI(title="PyMCP Kit", summary="Composable MCP toolkit on FastAPI")
     app.state.server_settings = server_settings or ServerSettings(
-        name=kwargs.get("server_name", "py-mcp"),
+        name=kwargs.get("server_name", "pymcp-kit"),
         version=kwargs.get("server_version", "0.2.0"),
     )
     app.state.registry_manager = RegistryManager()

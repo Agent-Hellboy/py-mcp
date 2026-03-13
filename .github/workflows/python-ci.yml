@@ -74,4 +74,4 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: Agent-Hellboy/py-sse-mcp
+          slug: Agent-Hellboy/py-mcp

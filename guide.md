@@ -1,6 +1,6 @@
 # Middleware Guide
 
-`py-mcp` keeps middleware separate from capability registration. Compression, CORS, and custom headers should be configured at the app edge, not inside the runtime dispatcher or the app-scoped registry/session layers.
+`PyMCP Kit` keeps middleware separate from capability registration. Compression, CORS, and custom headers should be configured at the app edge, not inside the runtime dispatcher or the app-scoped registry/session layers.
 
 The default HTTP transport is Streamable HTTP mounted at `/mcp`. If you need local-process MCP, use the stdio runner from `pymcp.transport`.
 
@@ -35,7 +35,7 @@ class RequestTagMiddleware:
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.append((b"x-server-shape", b"py-mcp"))
+                headers.append((b"x-server-shape", b"pymcp-kit"))
                 message["headers"] = headers
             await send(message)
 
