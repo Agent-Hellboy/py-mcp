@@ -1,29 +1,15 @@
-# Framework Middleware Configuration Guide
+# Middleware Guide
 
-This guide explains how to configure middleware in your framework using the provided `MiddlewareConfig` class or via keyword arguments.
+`py-mcp` keeps middleware separate from capability registration. Compression, CORS, and custom headers should be configured at the app edge, not inside the runtime dispatcher or the app-scoped registry/session layers.
 
-## Default Middleware
+The default HTTP transport is Streamable HTTP mounted at `/mcp`. If you need local-process MCP, use the stdio runner from `pymcp.transport`.
 
-The framework includes the following middleware by default:
-
-- **CORS**: Allows cross-origin requests (default: all origins, all methods, all headers).
-- **Logging**: Basic request/response logging (default: INFO level).
-- **Error Handling**: Basic error handling to prevent leaking internal details.
-
-Optional middleware you can enable/configure:
-- **Compression**: GZip compression for responses.
-- **Custom Middleware**: Add your own FastAPI-compatible middleware.
-
----
-
-## Configuration Methods
-
-You can configure middleware in two ways:
-
-### 1. Using `MiddlewareConfig`
+## Basic setup
 
 ```python
-from pymcp.server import create_app, MiddlewareConfig
+from pymcp import create_app
+from pymcp.middleware import MiddlewareConfig
+
 
 config = MiddlewareConfig(
     cors={
@@ -32,140 +18,65 @@ config = MiddlewareConfig(
         "allow_headers": ["*"],
         "allow_credentials": True,
     },
-    logging={
-        "level": "DEBUG",
-        "format": "%(asctime)s %(levelname)s %(message)s",
-    },
-    error_handling={
-        # Add custom error handlers if needed
-    },
-    compression={
-        "enabled": True
-    },
-    custom=[
-        # List of custom middleware classes
-    ]
+    compression={"enabled": True},
 )
 
 app = create_app(middleware_config=config)
 ```
 
-### 2. Using Keyword Arguments
+## Custom middleware
 
 ```python
-from pymcp.server import create_app
+class RequestTagMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-server-shape", b"py-mcp"))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+config = MiddlewareConfig(custom=[RequestTagMiddleware])
+app = create_app(middleware_config=config)
+```
+
+## Server identity and capability advertising
+
+```python
+from pymcp import CapabilitySettings, ServerSettings, create_app
 
 app = create_app(
-    cors={
-        "allow_origins": ["https://myapp.com"],
-        "allow_methods": ["GET", "POST"],
-        "allow_headers": ["*"],
-        "allow_credentials": True,
-    },
-    logging={
-        "level": "DEBUG",
-        "format": "%(asctime)s %(levelname)s %(message)s",
-    },
-    compression={
-        "enabled": True
-    },
-    custom=[
-        # List of custom middleware classes
-    ]
+    server_settings=ServerSettings(
+        name="ops-server",
+        version="0.2.0",
+        capabilities=CapabilitySettings(
+            advertise_empty_prompts=False,
+            advertise_empty_resources=False,
+        ),
+    )
 )
 ```
 
----
+Use that when you want to control what `initialize` advertises without changing middleware behavior.
 
-## Middleware Options
+## Defaults
 
-### CORS
-- `allow_origins`: List of allowed origins (default: `["*"]`)
-- `allow_methods`: List of allowed HTTP methods (default: `["*"]`)
-- `allow_headers`: List of allowed headers (default: `["*"]`)
-- `allow_credentials`: Allow credentials (default: `True`)
+- Streamable HTTP only allows localhost origins by default (`http://localhost`, `http://127.0.0.1`, `http://[::1]`); to allow other origins set `MCP_ALLOWED_ORIGINS=https://myapp.com` (comma-separated)
+- Compression is off by default
+- Custom middleware is applied in the order provided
+- No logging handlers are installed automatically
 
-### Logging
-- `level`: Log level (default: `"INFO"`)
-- `format`: Log format string
+## Recommended split
 
-### Error Handling
-- `custom_handler`: (Optional) Your custom error handler function
-
-### Compression
-- `enabled`: Enable GZip compression (default: `False`)
-
-### Custom Middleware
-- `custom`: List of FastAPI-compatible middleware classes to add
-
----
-
-## Example: Adding Custom Middleware
-
-```python
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class MyCustomMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        # Custom logic here
-        response = await call_next(request)
-        return response
-
-config = MiddlewareConfig(custom=[MyCustomMiddleware])
-app = create_app(middleware_config=config)
-```
-
----
-
-## Best Practices
-- Restrict CORS origins in production.
-- Use appropriate log levels for your environment.
-- Add custom error handlers for user-friendly error messages.
-- Enable compression for large responses or slow networks.
-- Add custom middleware for authentication, metrics, etc.
-
----
-
-## Recommended Usage: config.py
-
-For best practice, create a `config.py` file in your project root to define your middleware configuration. Then, import this config in your server entry point (e.g., `run_server.py`).
-
-### Example: config.py
-
-```python
-
-from pymcp.applications import create_app
-from pymcp.middleware import MiddlewareConfig
-
-middleware_config = MiddlewareConfig(
-    cors={
-        "allow_origins": ["https://myapp.com"],
-        "allow_methods": ["GET", "POST"],
-        "allow_headers": ["*"],
-        "allow_credentials": True,
-    },
-    logging={
-        "level": "DEBUG",
-        "format": "%(asctime)s %(levelname)s %(message)s",
-    },
-    compression={
-        "enabled": True
-    },
-    custom=[
-        # Add custom middleware classes here if needed
-    ]
-)
-```
-
-### Example: run_server.py
-
-```python
-from config import middleware_config
-from pymcp.server import create_app
-
-app = create_app(middleware_config=middleware_config)
-```
-
-This approach keeps your configuration clean and separated from your application logic.
-
-For more details, see the framework documentation or contact the maintainers. 
+- Keep `MiddlewareConfig` in `config.py`
+- Keep capability registrations near the domain logic they wrap
+- Let `create_app()` assemble the app-scoped registry manager and session manager
+- Keep HTTP transport concerns inside the mounted `/mcp` endpoint
+- Use `run_stdio_server(app)` when embedding the server in a stdio-based host
+- Keep `run_server.py` thin

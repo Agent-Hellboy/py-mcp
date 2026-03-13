@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py-sse-mcp"
-version = "0.1.0"
-description = "A Simple Framework for Creating an MCP Server using SSE protocol"
+version = "0.2.0"
+description = "A capability-first MCP server toolkit for FastAPI with Streamable HTTP and stdio transport"
 authors = [
     { name = "Prince Roshan", email = "princekrroshan01@gmail.com" }
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -19,4 +19,11 @@ dependencies = [
 license = {text = "MIT"}
 
 [project.urls]
-Homepage = "https://github.com/Agent-Hellboy/py-sse-mcp" 
+Homepage = "https://github.com/Agent-Hellboy/py-sse-mcp"
+
+[tool.setuptools.packages.find]
+include = ["pymcp*"]
+exclude = ["company*"]
+
+[tool.ruff]
+extend-exclude = ["company"]

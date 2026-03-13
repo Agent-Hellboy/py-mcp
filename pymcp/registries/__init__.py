@@ -1,6 +1,6 @@
-"""Compatibility re-exports for the registry layer."""
+"""Registry primitives and app-scoped registry manager."""
 
-from .registries.registry import (
+from .registry import (
     PromptDefinition,
     PromptRegistry,
     RegistryManager,

@@ -1,8 +1,14 @@
 import logging
 
 from config import middleware_config
-from pymcp.applications import create_app
-from pymcp.registry import tool_registry
+from pymcp import (
+    CapabilitySettings,
+    ServerSettings,
+    create_app,
+    prompt_registry,
+    resource_registry,
+    tool_registry,
+)
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -40,8 +46,32 @@ def promptEchoTool(prompt: str) -> str:
     return f"You said: {prompt}"
 
 
+@prompt_registry.register(description="Prompt template for release notes.")
+def releaseNotesPrompt(service: str) -> str:
+    return f"Draft a short release note for the {service} service."
+
+
+@resource_registry.register(
+    uri="memo://welcome",
+    name="welcome_memo",
+    description="Plain text welcome memo for clients.",
+)
+def welcomeMemo() -> str:
+    return "Welcome to py-mcp. Use tools for actions and resources for read-only context."
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    app = create_app(middleware_config=middleware_config)
+    app = create_app(
+        middleware_config=middleware_config,
+        server_settings=ServerSettings(
+            name="example-server",
+            version="0.2.0",
+            capabilities=CapabilitySettings(
+                advertise_empty_prompts=False,
+                advertise_empty_resources=False,
+            ),
+        ),
+    )
     uvicorn.run(app, host="0.0.0.0", port=8088)
