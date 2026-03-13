@@ -50,7 +50,7 @@ async def handle_resources_read(ctx: DispatchContext) -> DispatchResult:
         payload = error_response(ctx.rpc_id, INVALID_PARAMS, f"Invalid resource arguments: {exc}")
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
-    except Exception as exc:
+    except Exception:
         logger.exception("Error reading resource '%s'", uri)
         payload = error_response(ctx.rpc_id, INTERNAL_ERROR, "Error reading resource")
         await ctx.maybe_enqueue(payload)
