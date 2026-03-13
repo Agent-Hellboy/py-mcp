@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import Any
 from uuid import uuid4
 
 from .lifecycle import SessionLifecycle
+from .queueing import get_session_outbound_queue, safe_queue_put
 from .types import Session, SessionState
 
 
@@ -129,6 +131,9 @@ class SessionManager:
             return
         await lifecycle.close()
         session.lifecycle_state = SessionState.CLOSED
+        for future in session.pending_elicitations.values():
+            if not future.done():
+                future.cancel()
         self._sessions.pop(session_id, None)
         self._lifecycles.pop(session_id, None)
 
@@ -138,6 +143,89 @@ class SessionManager:
             return None
         await self.cleanup_session(session_id)
         return session
+
+    def register_elicitation_future(
+        self,
+        session_id: str,
+        rpc_id: str,
+        future: asyncio.Future[dict[str, Any]],
+    ) -> None:
+        """Track a pending elicitation future for a session."""
+
+        session = self._sessions.get(session_id)
+        if session is not None:
+            session.pending_elicitations[rpc_id] = future
+
+    def resolve_elicitation_response(
+        self,
+        session_id: str,
+        rpc_id: str,
+        payload: dict[str, Any],
+    ) -> bool:
+        """Resolve a pending elicitation for a specific session."""
+
+        session = self._sessions.get(session_id)
+        if session is None:
+            return False
+        future = session.pending_elicitations.pop(rpc_id, None)
+        if future is None or future.done():
+            return False
+        future.set_result(payload)
+        return True
+
+    def resolve_elicitation_response_any(
+        self,
+        rpc_id: str,
+        payload: dict[str, Any],
+    ) -> bool:
+        """Resolve a pending elicitation by searching all active sessions."""
+
+        for session in self._sessions.values():
+            future = session.pending_elicitations.get(rpc_id)
+            if future is None or future.done():
+                continue
+            session.pending_elicitations.pop(rpc_id, None)
+            future.set_result(payload)
+            return True
+        return False
+
+    def subscribe_resource(self, session_id: str, uri: str) -> bool:
+        """Subscribe a session to a resource URI."""
+
+        session = self._sessions.get(session_id)
+        if session is None:
+            return False
+        session.resource_subscriptions.add(uri)
+        return True
+
+    def unsubscribe_resource(self, session_id: str, uri: str) -> bool:
+        """Unsubscribe a session from a resource URI."""
+
+        session = self._sessions.get(session_id)
+        if session is None:
+            return False
+        removed = uri in session.resource_subscriptions
+        session.resource_subscriptions.discard(uri)
+        return removed
+
+    def broadcast_resource_update(self, uri: str, notification: dict[str, Any]) -> None:
+        """Broadcast a resource update to sessions subscribed to the URI."""
+
+        message = json.dumps(notification)
+        for session in self._sessions.values():
+            if session.lifecycle_state != SessionState.READY or not session.stream_attached:
+                continue
+            if uri in session.resource_subscriptions:
+                safe_queue_put(get_session_outbound_queue(session), message)
+
+    def broadcast_notification(self, notification: dict[str, Any]) -> None:
+        """Broadcast a notification to all ready sessions with an attached stream."""
+
+        message = json.dumps(notification)
+        for session in self._sessions.values():
+            if session.lifecycle_state != SessionState.READY or not session.stream_attached:
+                continue
+            safe_queue_put(get_session_outbound_queue(session), message)
 
 
 def get_session_manager(app: Any) -> SessionManager:

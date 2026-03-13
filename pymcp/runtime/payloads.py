@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Mapping
 from typing import Any
 
 from ..registries.registry import dump_value
@@ -30,11 +31,33 @@ def error_response(rpc_id: Any, code: int, message: str) -> dict[str, Any]:
     }
 
 
-def normalize_tool_result(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict) and (
-        "content" in value or "structuredContent" in value or "isError" in value
-    ):
+def _coerce_tool_result_mapping(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
         return value
+    if isinstance(value, Mapping):
+        return dict(value)
+
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(exclude_none=True)
+        if isinstance(dumped, dict):
+            return dumped
+
+    as_dict = getattr(value, "dict", None)
+    if callable(as_dict):
+        dumped = as_dict()
+        if isinstance(dumped, dict):
+            return dumped
+
+    return None
+
+
+def normalize_tool_result(value: Any) -> dict[str, Any]:
+    mapping_value = _coerce_tool_result_mapping(value)
+    if mapping_value is not None and (
+        "content" in mapping_value or "structuredContent" in mapping_value or "isError" in mapping_value
+    ):
+        return mapping_value
     if isinstance(value, list):
         return {"content": value}
     return {"content": [{"type": "text", "text": dump_value(value)}]}

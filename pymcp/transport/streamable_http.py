@@ -176,8 +176,21 @@ async def mcp_post(request: Request) -> Response:
             return _jsonrpc_http_error(400, INVALID_PARAMS, "MCP-Session-Id header required")
         session = session_manager.create_session()
         session_id = session.session_id
+        session.principal = getattr(request.state, "principal", None)
     elif session_manager.get_session(session_id) is None:
         return _jsonrpc_http_error(404, SESSION_NOT_FOUND, "Session not found")
+    else:
+        session = session_manager.get_session(session_id)
+        if session is not None:
+            session.principal = getattr(request.state, "principal", None)
+
+    if method_name is None:
+        rpc_id = data.get("id")
+        if isinstance(rpc_id, str) and session_manager.resolve_elicitation_response(session_id, rpc_id, data):
+            headers = _post_headers(request, session_id)
+            return Response(status_code=202, headers=headers)
+        headers = _post_headers(request, session_id)
+        return Response(status_code=202, headers=headers)
 
     result = await process_jsonrpc_message(
         session_id,

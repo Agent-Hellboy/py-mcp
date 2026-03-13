@@ -1,3 +1,5 @@
+import logging
+
 from fastapi.responses import PlainTextResponse
 from fastapi.testclient import TestClient
 
@@ -36,3 +38,15 @@ def test_gzip_and_custom_middleware():
     assert response.status_code == 200
     assert response.headers.get("content-encoding") == "gzip"
     assert response.headers.get("x-custom-middleware") == "true"
+
+
+def test_create_app_applies_middleware_logging_level():
+    config = MiddlewareConfig(
+        logging={
+            "level": "DEBUG",
+            "format": "%(asctime)s %(levelname)s %(message)s",
+        }
+    )
+    create_app(middleware_config=config)
+
+    assert logging.getLogger("pymcp").getEffectiveLevel() == logging.DEBUG

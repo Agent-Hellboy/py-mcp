@@ -4,13 +4,27 @@ from __future__ import annotations
 
 import inspect
 import json
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Callable, get_args, get_origin
+from typing import Any, Awaitable, Callable, ParamSpec, Sequence, TypeVar, cast, get_args, get_origin, overload
+
+from ..protocol.tool_execution import ToolExecutionConfig
 
 
 JSONSchema = dict[str, Any]
 SyncOrAsyncCallable = Callable[..., Any]
+SyncToolFunction = Callable[..., object]
+AsyncToolFunction = Callable[..., Awaitable[object]]
+ToolFunction = SyncToolFunction | AsyncToolFunction
 Listener = Callable[[], None]
+ListChangedListener = Callable[[], None]
+ResourceUpdatedListener = Callable[[str], None]
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R", bound=object)
+_ToolFuncT = TypeVar("_ToolFuncT", bound=ToolFunction)
+
+_INTERNAL_TOOL_PARAMS = frozenset({"cancel_token", "task_context", "request_context"})
 
 
 def _normalize_annotation(annotation: Any) -> Any:
@@ -50,6 +64,8 @@ def _schema_from_signature(func: SyncOrAsyncCallable) -> JSONSchema:
     schema: JSONSchema = {"type": "object", "properties": {}, "required": []}
     signature = inspect.signature(func)
     for name, parameter in signature.parameters.items():
+        if name in _INTERNAL_TOOL_PARAMS:
+            continue
         properties = schema["properties"]
         if not isinstance(properties, dict):
             continue
@@ -76,6 +92,22 @@ def _arguments_from_signature(func: SyncOrAsyncCallable) -> list[dict[str, Any]]
     return arguments
 
 
+def _notify_listeners(listeners: Sequence[ListChangedListener]) -> None:
+    for listener in list(listeners):
+        try:
+            listener()
+        except Exception:
+            continue
+
+
+def _notify_update_listeners(listeners: Sequence[ResourceUpdatedListener], uri: str) -> None:
+    for listener in list(listeners):
+        try:
+            listener(uri)
+        except Exception:
+            continue
+
+
 @dataclass(slots=True)
 class ToolDefinition:
     name: str
@@ -83,14 +115,17 @@ class ToolDefinition:
     input_schema: JSONSchema
     function: SyncOrAsyncCallable
     prompt: bool
+    execution: ToolExecutionConfig | None = None
 
     def to_mcp_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema,
-            "prompt": self.prompt,
         }
+        if self.execution:
+            payload["execution"] = dict(self.execution)
+        return payload
 
 
 @dataclass(slots=True)
@@ -145,11 +180,7 @@ class _RegistryBase:
             self._listeners.append(listener)
 
     def _notify_listeners(self) -> None:
-        for listener in list(self._listeners):
-            try:
-                listener()
-            except Exception:
-                continue
+        _notify_listeners(self._listeners)
 
 
 class ToolRegistry(_RegistryBase):
@@ -157,15 +188,25 @@ class ToolRegistry(_RegistryBase):
         super().__init__()
         self._tools: dict[str, ToolDefinition] = {}
 
-    def register(
+    def clear(self) -> None:
+        self._tools.clear()
+
+    def _register_tool(
         self,
-        func: SyncOrAsyncCallable | None = None,
+        func: _ToolFuncT,
         *,
         name: str | None = None,
         description: str | None = None,
-    ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
-        if func is None:
-            return lambda callback: self.register(callback, name=name, description=description)
+        execution: ToolExecutionConfig | None = None,
+    ) -> _ToolFuncT:
+        manager = get_current_registry_manager()
+        if manager is not None and manager.tool_registry is not self:
+            return manager.tool_registry.register(
+                func,
+                name=name,
+                description=description,
+                execution=execution,
+            )
 
         tool_name = name or func.__name__
         tool_description = (description if description is not None else (func.__doc__ or "")).strip()
@@ -175,16 +216,61 @@ class ToolRegistry(_RegistryBase):
             input_schema=_schema_from_signature(func),
             function=func,
             prompt="prompt" in inspect.signature(func).parameters,
+            execution=execution,
         )
         self._tools[tool_name] = definition
         self._notify_listeners()
         return func
 
-    def clear(self) -> None:
-        self._tools.clear()
+    @overload
+    def register(
+        self,
+        func: _ToolFuncT,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        execution: ToolExecutionConfig | None = None,
+    ) -> _ToolFuncT:
+        ...
+
+    @overload
+    def register(
+        self,
+        func: None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        execution: ToolExecutionConfig | None = None,
+    ) -> Callable[[_ToolFuncT], _ToolFuncT]:
+        ...
+
+    def register(
+        self,
+        func: _ToolFuncT | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        execution: ToolExecutionConfig | None = None,
+    ) -> Callable[[_ToolFuncT], _ToolFuncT] | _ToolFuncT:
+        if func is None:
+            return lambda callback: self._register_tool(
+                callback,
+                name=name,
+                description=description,
+                execution=execution,
+            )
+        return self._register_tool(
+            func,
+            name=name,
+            description=description,
+            execution=execution,
+        )
 
     def get(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)
+
+    def get_tool(self, name: str) -> ToolDefinition | None:
+        return self.get(name)
 
     def definitions(self) -> dict[str, ToolDefinition]:
         return dict(self._tools)
@@ -200,6 +286,7 @@ class ToolRegistry(_RegistryBase):
                 "description": tool.description,
                 "inputSchema": tool.input_schema,
                 "prompt": tool.prompt,
+                "execution": tool.execution,
             }
         return payload
 
@@ -211,6 +298,9 @@ class PromptRegistry(_RegistryBase):
     def __init__(self) -> None:
         super().__init__()
         self._prompts: dict[str, PromptDefinition] = {}
+
+    def clear(self) -> None:
+        self._prompts.clear()
 
     def register(
         self,
@@ -228,6 +318,15 @@ class PromptRegistry(_RegistryBase):
                 arguments=arguments,
             )
 
+        manager = get_current_registry_manager()
+        if manager is not None and manager.prompt_registry is not self:
+            return manager.prompt_registry.register(
+                func,
+                name=name,
+                description=description,
+                arguments=arguments,
+            )
+
         prompt_name = name or func.__name__
         prompt_description = (description if description is not None else (func.__doc__ or "")).strip()
         definition = PromptDefinition(
@@ -240,11 +339,11 @@ class PromptRegistry(_RegistryBase):
         self._notify_listeners()
         return func
 
-    def clear(self) -> None:
-        self._prompts.clear()
-
     def get(self, name: str) -> PromptDefinition | None:
         return self._prompts.get(name)
+
+    def get_prompt(self, name: str) -> PromptDefinition | None:
+        return self.get(name)
 
     def definitions(self) -> dict[str, PromptDefinition]:
         return dict(self._prompts)
@@ -263,36 +362,61 @@ class ResourceRegistry(_RegistryBase):
     def __init__(self) -> None:
         super().__init__()
         self._resources: dict[str, ResourceDefinition] = {}
+        self._update_listeners: list[ResourceUpdatedListener] = []
+
+    def clear(self) -> None:
+        self._resources.clear()
+
+    def add_update_listener(self, listener: ResourceUpdatedListener) -> None:
+        if callable(listener):
+            self._update_listeners.append(listener)
 
     def register(
         self,
+        func: SyncOrAsyncCallable | None = None,
         *,
         uri: str,
         name: str | None = None,
         description: str | None = None,
         mime_type: str = "text/plain",
-    ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable]:
-        def decorator(func: SyncOrAsyncCallable) -> SyncOrAsyncCallable:
-            resource_name = name or func.__name__
-            resource_description = (description if description is not None else (func.__doc__ or "")).strip()
-            definition = ResourceDefinition(
+    ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
+        if func is None:
+            return lambda callback: self.register(
+                callback,
                 uri=uri,
-                name=resource_name,
-                description=resource_description,
+                name=name,
+                description=description,
                 mime_type=mime_type,
-                function=func,
             )
-            self._resources[uri] = definition
-            self._notify_listeners()
-            return func
 
-        return decorator
+        manager = get_current_registry_manager()
+        if manager is not None and manager.resource_registry is not self:
+            return manager.resource_registry.register(
+                func,
+                uri=uri,
+                name=name,
+                description=description,
+                mime_type=mime_type,
+            )
 
-    def clear(self) -> None:
-        self._resources.clear()
+        resource_name = name or func.__name__
+        resource_description = (description if description is not None else (func.__doc__ or "")).strip()
+        definition = ResourceDefinition(
+            uri=uri,
+            name=resource_name,
+            description=resource_description,
+            mime_type=mime_type,
+            function=func,
+        )
+        self._resources[uri] = definition
+        self._notify_listeners()
+        return func
 
     def get(self, uri: str) -> ResourceDefinition | None:
         return self._resources.get(uri)
+
+    def get_resource(self, uri: str) -> ResourceDefinition | None:
+        return self.get(uri)
 
     def definitions(self) -> dict[str, ResourceDefinition]:
         return dict(self._resources)
@@ -303,8 +427,16 @@ class ResourceRegistry(_RegistryBase):
     def get_resources(self) -> dict[str, ResourceDefinition]:
         return dict(self._resources)
 
+    def list_resources(self) -> list[dict[str, Any]]:
+        return self.list_payload()
+
     def list_payload(self) -> list[dict[str, Any]]:
         return [resource.to_mcp_payload() for resource in self._resources.values()]
+
+    def notify_updated(self, uri: str) -> None:
+        if uri not in self._resources:
+            return
+        _notify_update_listeners(self._update_listeners, uri)
 
 
 class RegistryManager:
@@ -351,26 +483,48 @@ tool_registry = ToolRegistry()
 prompt_registry = PromptRegistry()
 resource_registry = ResourceRegistry()
 
+_CURRENT_REGISTRY_MANAGER: ContextVar[RegistryManager | None] = ContextVar(
+    "current_registry_manager",
+    default=None,
+)
+
 
 def get_registry_manager(app: Any) -> RegistryManager:
     if not hasattr(app.state, "registry_manager"):
         manager = RegistryManager()
         manager.copy_from_global_registries(tool_registry, prompt_registry, resource_registry)
         app.state.registry_manager = manager
-    return app.state.registry_manager
+    return cast(RegistryManager, app.state.registry_manager)
+
+
+def get_current_registry_manager() -> RegistryManager | None:
+    return _CURRENT_REGISTRY_MANAGER.get()
+
+
+def set_current_registry_manager(manager: RegistryManager | None) -> None:
+    _CURRENT_REGISTRY_MANAGER.set(manager)
 
 
 __all__ = [
+    "AsyncToolFunction",
+    "ListChangedListener",
     "PromptDefinition",
     "PromptRegistry",
     "RegistryManager",
     "ResourceDefinition",
     "ResourceRegistry",
+    "ResourceUpdatedListener",
+    "SyncOrAsyncCallable",
+    "SyncToolFunction",
     "ToolDefinition",
+    "ToolExecutionConfig",
+    "ToolFunction",
     "ToolRegistry",
     "dump_value",
+    "get_current_registry_manager",
     "get_registry_manager",
     "prompt_registry",
     "resource_registry",
+    "set_current_registry_manager",
     "tool_registry",
 ]

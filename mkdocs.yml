@@ -1,0 +1,82 @@
+site_name: PyMCP Kit
+site_description: Capability-first MCP server toolkit for FastAPI with Streamable HTTP and stdio transport
+site_author: Prince Roshan
+site_url: https://agent-hellboy.github.io/py-mcp/
+
+repo_name: Agent-Hellboy/py-mcp
+repo_url: https://github.com/Agent-Hellboy/py-mcp
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Agent-Hellboy/py-mcp
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - Middleware: middleware.md
+      - Tasks: tasks.md
+      - Security: security.md
+  - Reference:
+      - Runtime Surface: runtime-surface.md
+  - Development:
+      - Docs Deployment: deployment.md

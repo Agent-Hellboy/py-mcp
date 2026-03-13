@@ -4,12 +4,13 @@
 [![codecov](https://codecov.io/gh/Agent-Hellboy/py-mcp/graph/badge.svg)](https://codecov.io/gh/Agent-Hellboy/py-mcp)
 [![PyPI - Version](https://img.shields.io/pypi/v/pymcp-kit.svg)](https://pypi.org/project/pymcp-kit/)
 [![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
+[![Docs](https://img.shields.io/badge/docs-github%20pages-0f766e.svg)](https://agent-hellboy.github.io/py-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-[Middleware Guide](./guide.md) | [Quick Start](#quick-start) | [Features](#features) | [Example Server](#example-server) | [Stdio Transport](#stdio-transport)
+[Documentation](https://agent-hellboy.github.io/py-mcp/) | [Quick Start](https://agent-hellboy.github.io/py-mcp/getting-started/) | [Tasks](https://agent-hellboy.github.io/py-mcp/tasks/) | [Security](https://agent-hellboy.github.io/py-mcp/security/) | [Middleware](https://agent-hellboy.github.io/py-mcp/middleware/)
 
-`PyMCP Kit` is a capability-first MCP server toolkit for FastAPI. It keeps the transport surface small, supports Streamable HTTP and stdio, and gives you app-scoped registries, session management, and runtime dispatch without pulling in a larger framework.
+`PyMCP Kit` is a capability-first MCP server toolkit for FastAPI. It keeps the built-in transport surface small, supports Streamable HTTP and stdio, and ships app-scoped registries, roots, tasks, and optional auth hooks without pulling in a larger framework.
 
 ## Quick Start
 
@@ -72,22 +73,28 @@ app = create_app(
 
 The HTTP transport is mounted at `/mcp`. For local-process integrations, use `run_stdio_server(app)`.
 
+Hosted documentation is built from `docs/` with MkDocs Material and published to GitHub Pages.
+
 ## Features
 
 - Streamable HTTP transport for networked MCP servers
 - Stdio transport for local-process MCP hosts
 - Tool, prompt, and resource registries
-- App-scoped session lifecycle and runtime dispatch
+- Roots, resource subscriptions, and app-scoped session lifecycle
+- Task-aware tool execution with progress, cancellation, and result polling
+- Optional authentication and authorization hooks
 - Capability advertising through `CapabilitySettings`
 - FastAPI middleware integration through `MiddlewareConfig`
 - Small surface area focused on practical MCP server builds
 
 ## Supported MCP Methods
 
-- `initialize` and `ping`
+- `initialize`, `ping`, `notifications/initialized`, and `notifications/cancelled`
 - `tools/list` and `tools/call`
 - `prompts/list` and `prompts/get`
-- `resources/list` and `resources/read`
+- `resources/list`, `resources/read`, `resources/subscribe`, and `resources/unsubscribe`
+- `roots/list`
+- `tasks/list`, `tasks/get`, `tasks/cancel`, and `tasks/result`
 
 ## Example Server
 
@@ -111,11 +118,11 @@ run_stdio_server(app)
 
 ## Middleware
 
-Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, and custom ASGI middleware, then pass it into `create_app()`. See [guide.md](./guide.md) for examples.
+Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, auth hooks, and custom ASGI middleware, then pass it into `create_app()`. See the hosted [Middleware guide](https://agent-hellboy.github.io/py-mcp/middleware/) for examples.
 
 ## Scope
 
 - Prompts and resources are advertised only when registered by default
 - Registries are copied into an app-scoped manager when `create_app()` runs
 - Streamable HTTP and stdio are the only built-in transports
-- Auth, tasks, and richer transport variants stay out of the default package surface
+- Extra transports such as SSE and HTTP NDJSON are intentionally not shipped in `pymcp-kit`

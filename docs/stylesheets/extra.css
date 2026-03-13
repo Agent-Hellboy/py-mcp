@@ -1,0 +1,40 @@
+.md-typeset .hero {
+  padding: 1.5rem 0 2rem;
+}
+
+.md-typeset .hero p {
+  font-size: 1.05rem;
+  max-width: 48rem;
+}
+
+.md-typeset .hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+}
+
+.md-typeset .pymcp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.md-typeset .pymcp-card {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background:
+    linear-gradient(
+      160deg,
+      rgba(15, 118, 110, 0.08),
+      rgba(245, 158, 11, 0.08)
+    ),
+    var(--md-default-bg-color);
+  box-shadow: var(--md-shadow-z1);
+}
+
+.md-typeset .pymcp-card h3 {
+  margin-top: 0;
+}
