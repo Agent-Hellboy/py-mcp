@@ -1,20 +1,31 @@
-# py-mcp
+# PyMCP Kit
 
-`py-mcp` is a capability-first MCP server toolkit for FastAPI. It keeps the transport layer small, supports Streamable HTTP and stdio only, and follows a layered structure inspired by the internal framework: app-scoped registries, a session manager, and a runtime dispatcher with method handlers.
+[![Python CI](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml/badge.svg)](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml)
+[![codecov](https://codecov.io/gh/Agent-Hellboy/py-mcp/graph/badge.svg)](https://codecov.io/gh/Agent-Hellboy/py-mcp)
+[![PyPI - Version](https://img.shields.io/pypi/v/pymcp-kit.svg)](https://pypi.org/project/pymcp-kit/)
+[![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-## Quickstart
+[Middleware Guide](./guide.md) | [Quick Start](#quick-start) | [Features](#features) | [Example Server](#example-server) | [Stdio Transport](#stdio-transport)
+
+`PyMCP Kit` is a capability-first MCP server toolkit for FastAPI. It keeps the transport surface small, supports Streamable HTTP and stdio, and gives you app-scoped registries, session management, and runtime dispatch without pulling in a larger framework.
+
+## Quick Start
+
+Install from PyPI:
 
 ```bash
-pip install .
-python example/run_server.py
+pip install pymcp-kit
 ```
 
-Transport entrypoints:
+For local development from this repo:
 
-- Streamable HTTP at `/mcp`
-- Stdio via `pymcp.transport.run_stdio_server(app)`
+```bash
+pip install -e .
+```
 
-## Register capabilities
+Register tools, prompts, and resources, then build an app:
 
 ```python
 from pymcp import (
@@ -29,7 +40,7 @@ from pymcp import (
 
 @tool_registry.register
 def add(a: float, b: float) -> str:
-    return f"{a + b}"
+    return str(a + b)
 
 
 @prompt_registry.register(description="Create a release summary prompt.")
@@ -50,7 +61,7 @@ def release_plan() -> str:
 app = create_app(
     server_settings=ServerSettings(
         name="demo-server",
-        version="0.2.0",
+        version="0.1.0",
         capabilities=CapabilitySettings(
             advertise_empty_prompts=False,
             advertise_empty_resources=False,
@@ -59,17 +70,36 @@ app = create_app(
 )
 ```
 
-## What this repo implements
+The HTTP transport is mounted at `/mcp`. For local-process integrations, use `run_stdio_server(app)`.
 
-- `initialize`, `ping`
-- `tools/list`, `tools/call`
-- `prompts/list`, `prompts/get`
-- `resources/list`, `resources/read`
-- Configurable FastAPI middleware
+## Features
 
-The package intentionally stays smaller than a full multi-transport MCP framework. It focuses on the surfaces most teams need to stand up a usable server quickly.
+- Streamable HTTP transport for networked MCP servers
+- Stdio transport for local-process MCP hosts
+- Tool, prompt, and resource registries
+- App-scoped session lifecycle and runtime dispatch
+- Capability advertising through `CapabilitySettings`
+- FastAPI middleware integration through `MiddlewareConfig`
+- Small surface area focused on practical MCP server builds
 
-## Stdio transport
+## Supported MCP Methods
+
+- `initialize` and `ping`
+- `tools/list` and `tools/call`
+- `prompts/list` and `prompts/get`
+- `resources/list` and `resources/read`
+
+## Example Server
+
+Run the bundled example server:
+
+```bash
+python example/run_server.py
+```
+
+That starts a FastAPI app on `http://127.0.0.1:8088` with the MCP endpoint mounted at `http://127.0.0.1:8088/mcp`.
+
+## Stdio Transport
 
 ```python
 from pymcp import create_app, run_stdio_server
@@ -79,24 +109,13 @@ app = create_app()
 run_stdio_server(app)
 ```
 
-## Package shape
-
-- `registries/`: tool, prompt, and resource registries plus `RegistryManager`
-- `session/`: session types and `SessionManager`
-- `runtime/dispatch.py`: JSON-RPC validation, gating, and handler routing
-- `runtime/handlers/`: lifecycle, prompt, resource, and tool handlers
-- `runtime/server.py`: FastAPI app factory
-- `transport/streamable_http.py`: Streamable HTTP transport routes
-- `transport/stdio.py`: stdio transport runner
-- `server.py`: root route plus mounted HTTP transport
-
 ## Middleware
 
-Middleware is configured separately from capability registration through `MiddlewareConfig`. See [guide.md](./guide.md).
+Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, and custom ASGI middleware, then pass it into `create_app()`. See [guide.md](./guide.md) for examples.
 
-## Notes
+## Scope
 
-- The transport focus is Streamable HTTP and stdio.
-- Registries are copied into an app-scoped manager when `create_app()` runs.
-- Prompts and resources are advertised only when registered by default.
-- Tasks, auth, and richer transport variants are intentionally out of scope for this package.
+- Prompts and resources are advertised only when registered by default
+- Registries are copied into an app-scoped manager when `create_app()` runs
+- Streamable HTTP and stdio are the only built-in transports
+- Auth, tasks, and richer transport variants stay out of the default package surface

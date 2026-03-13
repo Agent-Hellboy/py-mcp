@@ -39,6 +39,20 @@ def test_root():
     assert payload["transport"]["stdio"] is True
 
 
+def test_default_server_settings_flow_into_initialize_and_root():
+    client = _build_client()
+    response = client.get("/")
+    assert response.status_code == 200
+    root_payload = response.json()
+    assert root_payload["server"]["name"] == "pymcp-kit"
+    assert root_payload["server"]["version"] == "0.1.0"
+
+    _, initialize_response = _initialize_session(client)
+    body = initialize_response.json()
+    assert body["result"]["serverInfo"]["name"] == "pymcp-kit"
+    assert body["result"]["serverInfo"]["version"] == "0.1.0"
+
+
 def test_streamable_http_route_is_registered():
     app = create_app()
     paths = {route.path for route in app.routes}

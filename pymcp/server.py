@@ -1,4 +1,4 @@
-"""HTTP entrypoints for py-mcp."""
+"""HTTP entrypoints for PyMCP Kit."""
 
 from __future__ import annotations
 

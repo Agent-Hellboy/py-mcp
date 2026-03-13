@@ -57,7 +57,7 @@ def releaseNotesPrompt(service: str) -> str:
     description="Plain text welcome memo for clients.",
 )
 def welcomeMemo() -> str:
-    return "Welcome to py-mcp. Use tools for actions and resources for read-only context."
+    return "Welcome to PyMCP Kit. Use tools for actions and resources for read-only context."
 
 
 if __name__ == "__main__":
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         middleware_config=middleware_config,
         server_settings=ServerSettings(
             name="example-server",
-            version="0.2.0",
+            version="0.1.0",
             capabilities=CapabilitySettings(
                 advertise_empty_prompts=False,
                 advertise_empty_resources=False,
