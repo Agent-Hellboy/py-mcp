@@ -5,7 +5,7 @@ import pytest
 from pymcp.util.state_machine import AsyncStateMachine, Transition
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 async def test_on_any_transition_hooks_are_serialized_in_commit_order():
@@ -93,7 +93,7 @@ async def test_hooks_cannot_call_trigger_directly():
         initial="A",
         name="sm",
         on_any_transition=observer,
-        transitions={"A": {"go": Transition("A")}},
+        transitions={"A": {"go": Transition("A"), "anything": Transition("A")}},
     )
 
     with pytest.raises(RuntimeError, match=r"use trigger_later\(\) instead"):

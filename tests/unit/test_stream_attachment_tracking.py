@@ -3,7 +3,7 @@ import pytest
 from pymcp.session.store import SessionManager
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 async def test_stream_attachment_flags_toggle_without_lifecycle_change():

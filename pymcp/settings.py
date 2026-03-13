@@ -30,6 +30,13 @@ class ServerSettings:
     protocol_versions: tuple[str, ...] = SUPPORTED_PROTOCOL_VERSIONS
     capabilities: CapabilitySettings = field(default_factory=CapabilitySettings)
 
+    def __post_init__(self) -> None:
+        if not self.protocol_versions:
+            raise ValueError(
+                "ServerSettings.protocol_versions cannot be empty; "
+                "at least one supported version is required"
+            )
+
 
 __all__ = [
     "CapabilitySettings",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 
 from ..helpers import ensure_mapping, maybe_await
 from ..payloads import INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, error_response, normalize_resource_result, success
@@ -42,6 +43,7 @@ async def handle_resources_read(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 
+    logger = logging.getLogger(__name__)
     try:
         result = await maybe_await(resource.function(**_resource_call_kwargs(resource)))
     except TypeError as exc:
@@ -49,7 +51,8 @@ async def handle_resources_read(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
     except Exception as exc:
-        payload = error_response(ctx.rpc_id, INTERNAL_ERROR, f"Error reading resource '{uri}': {exc}")
+        logger.exception("Error reading resource '%s'", uri)
+        payload = error_response(ctx.rpc_id, INTERNAL_ERROR, "Error reading resource")
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 

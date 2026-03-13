@@ -6,7 +6,7 @@ from pymcp.session.lifecycle import SessionState
 from pymcp.session.store import SessionManager
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 async def test_session_lifecycle_reaches_ready_after_handshake():

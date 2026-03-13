@@ -19,7 +19,7 @@ dependencies = [
 license = {text = "MIT"}
 
 [project.urls]
-Homepage = "https://github.com/Agent-Hellboy/py-sse-mcp" 
+Homepage = "https://github.com/Agent-Hellboy/py-sse-mcp"
 
 [tool.setuptools.packages.find]
 include = ["pymcp*"]

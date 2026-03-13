@@ -34,9 +34,9 @@ class RequestTagMiddleware:
     async def __call__(self, scope, receive, send):
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
-                headers = dict(message.get("headers", []))
-                headers[b"x-server-shape"] = b"py-mcp"
-                message["headers"] = list(headers.items())
+                headers = list(message.get("headers", []))
+                headers.append((b"x-server-shape", b"py-mcp"))
+                message["headers"] = headers
             await send(message)
 
         await self.app(scope, receive, send_wrapper)
@@ -67,7 +67,7 @@ Use that when you want to control what `initialize` advertises without changing 
 
 ## Defaults
 
-- CORS is open by default
+- Streamable HTTP only allows localhost origins by default (`http://localhost`, `http://127.0.0.1`, `http://[::1]`); to allow other origins set `MCP_ALLOWED_ORIGINS=https://myapp.com` (comma-separated)
 - Compression is off by default
 - Custom middleware is applied in the order provided
 - No logging handlers are installed automatically

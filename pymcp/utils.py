@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from .registries.registry import get_registry_manager
 from .runtime.dispatch import process_jsonrpc_message
 from .session.store import SessionManager
 from .session.types import Session, SessionState
 from .settings import ServerSettings
+
+
+def _init_app_state(app: FastAPI) -> None:
+    """Initialize app state used by the dispatcher."""
+    if not hasattr(app.state, "server_settings"):
+        app.state.server_settings = ServerSettings()
+    if not hasattr(app.state, "session_manager"):
+        app.state.session_manager = SessionManager()
+    get_registry_manager(app)  # ensures registry_manager with copy from globals
 
 
 async def handle_rpc_method(method, data, session_id, rpc_id, sessions):
@@ -19,8 +29,7 @@ async def handle_rpc_method(method, data, session_id, rpc_id, sessions):
     payload = {"jsonrpc": "2.0", "id": rpc_id, "method": method}
     payload.update(data)
     app = FastAPI()
-    app.state.server_settings = ServerSettings()
-    app.state.session_manager = SessionManager()
+    _init_app_state(app)
     session = Session(
         session_id=session_id,
         queue=raw_session["queue"],

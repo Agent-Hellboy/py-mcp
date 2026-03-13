@@ -7,7 +7,7 @@ from pymcp.transport import StdioTransport
 from tests.support import register_sample_capabilities
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 async def test_stdio_transport_round_trip():

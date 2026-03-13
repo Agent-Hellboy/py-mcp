@@ -9,8 +9,25 @@ from fastapi import Request
 
 
 def accept_contains(request: Request, content_type: str) -> bool:
-    accept = request.headers.get("accept", "*/*").lower()
-    return accept == "*/*" or content_type.lower() in accept
+    """Return True if the request Accept header allows the given content type."""
+    wanted = content_type.lower().split(";")[0].strip()
+    for part in request.headers.get("accept", "*/*").split(","):
+        media_range, *params = [item.strip().lower() for item in part.split(";")]
+        q = 1.0
+        for param in params:
+            if param.startswith("q="):
+                try:
+                    q = float(param[2:])
+                except ValueError:
+                    q = 0.0
+                break
+        if q == 0:
+            continue
+        if media_range in {"*/*", wanted}:
+            return True
+        if media_range.endswith("/*") and wanted.startswith(media_range[:-1]):
+            return True
+    return False
 
 
 def get_mcp_session_id(request: Request) -> str | None:
