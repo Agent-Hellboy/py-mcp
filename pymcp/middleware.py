@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Sequence, TypedDict
+from typing import Sequence
+
+from typing_extensions import TypedDict
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware

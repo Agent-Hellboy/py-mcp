@@ -15,6 +15,7 @@ dependencies = [
     "fastapi",
     "jsonschema",
     "pydantic>=2",
+    "typing-extensions>=4.0",
     "uvicorn",
     "requests"
 ]
