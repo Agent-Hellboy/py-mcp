@@ -72,6 +72,10 @@ class SessionLifecycle:
     def state(self) -> SessionState:
         return self._machine.state
 
+    def restore_state(self, state: SessionState) -> None:
+        """Restore lifecycle to a specific state (e.g. when re-attaching a session)."""
+        self._machine._state = state
+
     def touch(self) -> None:
         self.last_activity = self._now()
         self._session.last_activity = self.last_activity
@@ -104,4 +108,6 @@ class SessionLifecycle:
         return False
 
     def can_resume(self) -> bool:
+        if self.state == SessionState.CLOSED:
+            return False
         return self._now() - self.last_activity <= self._resume_grace

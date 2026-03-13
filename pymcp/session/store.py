@@ -50,7 +50,7 @@ class SessionManager:
         lifecycle = self._build_lifecycle(session)
         lifecycle.created_at = session.created_at
         lifecycle.last_activity = session.last_activity
-        lifecycle._machine._state = session.lifecycle_state  # type: ignore[attr-defined]  # compatibility restoration
+        lifecycle.restore_state(session.lifecycle_state)
         self._lifecycles[session.session_id] = lifecycle
         return session
 

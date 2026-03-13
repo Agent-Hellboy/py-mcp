@@ -141,18 +141,24 @@ class AsyncStateMachine(Generic[StateT, EventT]):
         current_tail: asyncio.Future[None],
     ) -> None:
         try:
-            await previous_tail
-        except Exception:
-            pass
+            try:
+                await previous_tail
+            except Exception:
+                pass
 
-        try:
             for hook in after_hooks:
                 await self._invoke_hook(hook)
-        except Exception as exc:
-            current_tail.set_exception(exc)
+        except asyncio.CancelledError:
+            if not current_tail.done():
+                current_tail.set_result(None)
             raise
-
-        current_tail.set_result(None)
+        except Exception as exc:
+            if not current_tail.done():
+                current_tail.set_exception(exc)
+            raise
+        else:
+            if not current_tail.done():
+                current_tail.set_result(None)
 
     async def _invoke_hook(self, hook: Callable[[], None | Awaitable[None]]) -> None:
         token = _IN_HOOK.set(True)

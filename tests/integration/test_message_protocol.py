@@ -1,15 +1,13 @@
 import pytest
 
 from pymcp import create_app
-from tests.support import register_sample_capabilities
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture
-def app():
-    register_sample_capabilities()
+def app(sample_capabilities):
     return create_app(middleware_config=None)
 
 

@@ -3,10 +3,9 @@ import pytest
 from pymcp import create_app
 from pymcp.runtime.dispatch import process_jsonrpc_message
 from pymcp.session.store import get_session_manager
-from tests.support import register_sample_capabilities
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 async def test_prompts_not_supported_when_registry_is_empty():
@@ -28,8 +27,7 @@ async def test_prompts_not_supported_when_registry_is_empty():
     assert result.payload["error"]["message"] == "prompts not supported"
 
 
-async def test_resources_supported_once_registered():
-    register_sample_capabilities()
+async def test_resources_supported_once_registered(sample_capabilities):
     app = create_app(middleware_config=None)
     manager = get_session_manager(app)
     session = manager.create_session()
@@ -44,4 +42,7 @@ async def test_resources_supported_once_registered():
     )
 
     assert result.status == 200
-    assert result.payload["result"]["resources"][0]["uri"] == "memo://release-plan"
+    assert any(
+        r["uri"] == "memo://release-plan"
+        for r in result.payload["result"]["resources"]
+    )

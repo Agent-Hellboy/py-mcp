@@ -1,7 +1,7 @@
 from fastapi.responses import PlainTextResponse
 from fastapi.testclient import TestClient
 
-from pymcp.applications import create_app
+from pymcp import create_app
 from pymcp.middleware import MiddlewareConfig
 
 

@@ -5,7 +5,7 @@ from pymcp.runtime.dispatch import process_jsonrpc_message
 from pymcp.session.store import get_session_manager
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 async def test_non_initialize_method_rejected_before_ready():

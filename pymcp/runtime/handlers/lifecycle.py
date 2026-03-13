@@ -16,7 +16,6 @@ async def handle_initialize(ctx: DispatchContext) -> DispatchResult:
     session.protocol_version = select_protocol_version(params.get("protocolVersion"), ctx.server_settings)
     session.client_capabilities = ensure_mapping(params.get("capabilities"))
     session.client_info = ensure_mapping(params.get("clientInfo"))
-    await ctx.session_manager.mark_initialize_started(ctx.session_id)
 
     payload = success(
         ctx.rpc_id,
@@ -35,6 +34,7 @@ async def handle_initialize(ctx: DispatchContext) -> DispatchResult:
         },
     )
     await ctx.maybe_enqueue(payload)
+    await ctx.session_manager.mark_initialize_started(ctx.session_id)
     return make_result(200, json_response=True, payload=payload)
 
 

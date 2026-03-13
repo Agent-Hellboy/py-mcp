@@ -1,6 +1,6 @@
 import requests
 
-from pymcp.applications import create_app
+from pymcp import create_app
 from pymcp.registry import tool_registry
 
 

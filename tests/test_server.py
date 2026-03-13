@@ -1,7 +1,6 @@
 from fastapi.testclient import TestClient
 
 from pymcp import create_app
-from tests.support import register_sample_capabilities
 
 
 def _headers(session_id=None, *, accept="application/json, text/event-stream"):
@@ -48,8 +47,7 @@ def test_streamable_http_route_is_registered():
     assert "/message" not in paths
 
 
-def test_initialize_returns_capabilities():
-    register_sample_capabilities()
+def test_initialize_returns_capabilities(sample_capabilities):
     client = _build_client()
     session_id, response = _initialize_session(client)
     body = response.json()
@@ -71,8 +69,7 @@ def test_requests_without_session_header_are_rejected():
     assert response.json()["error"]["message"] == "MCP-Session-Id header required"
 
 
-def test_tool_list_and_call():
-    register_sample_capabilities()
+def test_tool_list_and_call(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
     client.post(
@@ -105,8 +102,7 @@ def test_tool_list_and_call():
     assert response.json()["result"]["content"][0]["text"] == "Sum of 2 + 3 = 5"
 
 
-def test_prompt_methods():
-    register_sample_capabilities()
+def test_prompt_methods(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
     client.post(
@@ -122,7 +118,7 @@ def test_prompt_methods():
     )
     assert response.status_code == 200
     prompts = response.json()["result"]["prompts"]
-    assert prompts[0]["name"] == "summarize_prompt"
+    assert any(p["name"] == "summarize_prompt" for p in prompts)
 
     response = client.post(
         "/mcp",
@@ -139,8 +135,7 @@ def test_prompt_methods():
     assert "latency" in message
 
 
-def test_resource_methods():
-    register_sample_capabilities()
+def test_resource_methods(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
     client.post(
@@ -156,7 +151,7 @@ def test_resource_methods():
     )
     assert response.status_code == 200
     resources = response.json()["result"]["resources"]
-    assert resources[0]["uri"] == "memo://release-plan"
+    assert any(r["uri"] == "memo://release-plan" for r in resources)
 
     response = client.post(
         "/mcp",
@@ -184,8 +179,7 @@ def test_initialized_notification_is_accepted():
     assert response.status_code == 202
 
 
-def test_methods_remain_blocked_until_initialized_notification():
-    register_sample_capabilities()
+def test_methods_remain_blocked_until_initialized_notification(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
 

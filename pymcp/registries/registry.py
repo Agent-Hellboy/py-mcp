@@ -33,7 +33,9 @@ def _normalize_annotation(annotation: Any) -> Any:
 
 def _annotation_to_schema(annotation: Any) -> JSONSchema:
     annotation = _normalize_annotation(annotation)
-    if annotation in {int, float}:
+    if annotation is int:
+        return {"type": "integer"}
+    if annotation is float:
         return {"type": "number"}
     if annotation is bool:
         return {"type": "boolean"}
@@ -231,7 +233,7 @@ class PromptRegistry(_RegistryBase):
         definition = PromptDefinition(
             name=prompt_name,
             description=prompt_description,
-            arguments=arguments or _arguments_from_signature(func),
+            arguments=arguments if arguments is not None else _arguments_from_signature(func),
             function=func,
         )
         self._prompts[prompt_name] = definition

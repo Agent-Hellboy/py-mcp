@@ -20,7 +20,7 @@ def get_mcp_session_id(request: Request) -> str | None:
 async def try_parse_json_body(request: Request) -> dict[str, Any] | list[Any] | None:
     try:
         payload = await request.json()
-    except (ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
         return None
     if isinstance(payload, (dict, list)):
         return payload

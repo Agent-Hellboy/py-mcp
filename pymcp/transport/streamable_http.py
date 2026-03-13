@@ -162,6 +162,8 @@ async def mcp_post(request: Request) -> Response:
         return _jsonrpc_http_error(400, PARSE_ERROR, "Parse error")
     if isinstance(body, list):
         return _jsonrpc_http_error(400, INVALID_REQUEST, "Batch JSON-RPC requests are not supported")
+    if not isinstance(body, dict):
+        return _jsonrpc_http_error(400, INVALID_REQUEST, "Invalid JSON-RPC request")
     data = body
 
     session_manager = get_session_store(request.app)

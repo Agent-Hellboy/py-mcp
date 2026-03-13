@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Awaitable, Protocol
 
 from fastapi import FastAPI
@@ -14,12 +15,13 @@ from .payloads import INVALID_REQUEST, JSONRPC_VERSION, METHOD_NOT_FOUND, INTERN
 from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject
 
 # Side-effect imports register built-in handlers.
-from .handlers import lifecycle as _lifecycle  # pylint: disable=unused-import
-from .handlers import prompts as _prompts  # pylint: disable=unused-import
-from .handlers import resources as _resources  # pylint: disable=unused-import
-from .tools import handlers as _tools  # pylint: disable=unused-import
+from .handlers import lifecycle as _lifecycle  # noqa: F401
+from .handlers import prompts as _prompts  # noqa: F401
+from .handlers import resources as _resources  # noqa: F401
+from .tools import handlers as _tools  # noqa: F401
 
 BUILTIN_HANDLER_MODULES = (_lifecycle, _prompts, _resources, _tools)
+logger = logging.getLogger(__name__)
 
 
 class DispatchError(Exception):
@@ -53,6 +55,7 @@ class ErrorBoundaryMiddleware:
         try:
             return await call_next(ctx)
         except Exception:
+            logger.exception("Unhandled exception in dispatch pipeline for method %s", ctx.method)
             payload = error_response(
                 ctx.rpc_id if "id" in ctx.data else None,
                 INTERNAL_ERROR,
@@ -109,12 +112,16 @@ class Dispatcher:
         handlers: dict[str, object] | None = None,
         middlewares: list[DispatchMiddleware] | None = None,
     ) -> None:
-        self._handlers = handlers or get_registered_handlers()
-        self._middlewares = middlewares or [
-            ErrorBoundaryMiddleware(),
-            InitGateMiddleware(),
-            CapabilityGateMiddleware(),
-        ]
+        self._handlers = handlers  # None = use get_registered_handlers() at call time
+        self._middlewares = (
+            middlewares
+            if middlewares is not None
+            else [
+                ErrorBoundaryMiddleware(),
+                InitGateMiddleware(),
+                CapabilityGateMiddleware(),
+            ]
+        )
 
     @staticmethod
     def _validate_envelope(data: JSONObject) -> tuple[object, str]:
@@ -148,7 +155,8 @@ class Dispatcher:
         return session_manager, session
 
     async def _call_handler(self, ctx: DispatchContext) -> DispatchResponse:
-        handler = self._handlers.get(ctx.method)
+        handlers = self._handlers if self._handlers is not None else get_registered_handlers()
+        handler = handlers.get(ctx.method)
         if handler is None:
             payload = error_response(ctx.rpc_id, METHOD_NOT_FOUND, f"Unsupported method '{ctx.method}'")
             await ctx.maybe_enqueue(payload)
@@ -179,6 +187,9 @@ class Dispatcher:
             payload = error_response(exc.rpc_id, exc.code, exc.message)
             return DispatchResponse(status=exc.status, json=True, payload=payload)
 
+        server_settings = getattr(app.state, "server_settings", None)
+        if server_settings is None:
+            raise RuntimeError("app.state.server_settings is not set; ensure the app is initialized with create_app")
         ctx = DispatchContext(
             session_id=session_id,
             data=data,
@@ -187,7 +198,7 @@ class Dispatcher:
             rpc_id=rpc_id,
             method=method,
             registry_manager=get_registry_manager(app),
-            server_settings=app.state.server_settings,
+            server_settings=server_settings,
             session_manager=session_manager,
             direct_response=direct_response,
         )

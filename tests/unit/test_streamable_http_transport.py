@@ -8,7 +8,7 @@ from pymcp.session import get_session_store
 from pymcp.transport.streamable_http import _stream_session_events
 
 
-pytestmark = pytest.mark.anyio("asyncio")
+pytestmark = pytest.mark.anyio
 
 
 class _FakeRequest:
