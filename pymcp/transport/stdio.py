@@ -103,16 +103,29 @@ class StdioTransport:
             return
         await self._write_payload(response)
 
+    async def _process_line_with_slot(
+        self,
+        app: FastAPI,
+        line: str,
+        request_slots: asyncio.Semaphore,
+    ) -> None:
+        try:
+            await self._process_line(app, line)
+        finally:
+            request_slots.release()
+
     async def run(self, app: FastAPI) -> None:
         loop = asyncio.get_running_loop()
         pending_tasks: set[asyncio.Task[None]] = set()
+        request_slots = asyncio.Semaphore(32)
         queue_task = asyncio.create_task(self._pump_session_queue(app))
         try:
             while True:
                 line = await loop.run_in_executor(None, self._input.readline)
                 if not line:
                     break
-                task = asyncio.create_task(self._process_line(app, line))
+                await request_slots.acquire()
+                task = asyncio.create_task(self._process_line_with_slot(app, line, request_slots))
                 pending_tasks.add(task)
                 task.add_done_callback(pending_tasks.discard)
         finally:

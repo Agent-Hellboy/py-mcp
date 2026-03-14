@@ -12,18 +12,14 @@ from fastapi import FastAPI
 
 from ..capabilities.registry import ServerCapabilities, get_server_capabilities, negotiate_capabilities
 from ..registries.registry import get_registry_manager
-from ..settings import ServerSettings
+from ..settings import SUPPORTED_PROTOCOL_VERSIONS as SERVER_SUPPORTED_PROTOCOL_VERSIONS, ServerSettings
 from .errors import MCPErrorCode
 from .json_types import JSONValue, JSONObject, RPCId
 from .jsonrpc import build_error_envelope, build_result_envelope
 
 
-DEFAULT_PROTOCOL_VERSION: Final[str] = "2025-06-18"
-SUPPORTED_PROTOCOL_VERSIONS: Final[tuple[str, ...]] = (
-    "2025-11-25",
-    DEFAULT_PROTOCOL_VERSION,
-    "2025-03-26",
-)
+SUPPORTED_PROTOCOL_VERSIONS: Final[tuple[str, ...]] = SERVER_SUPPORTED_PROTOCOL_VERSIONS
+DEFAULT_PROTOCOL_VERSION: Final[str] = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 def success(rpc_id: RPCId, result: JSONObject) -> JSONObject:
     return build_result_envelope(rpc_id, result)
@@ -253,7 +249,14 @@ _FACTORY_BY_PROTOCOL_VERSION: Final[Mapping[str, type[PayloadFactory]]] = Mappin
 
 
 def get_payload_factory(protocol_version: str | None, *, app: FastAPI | None = None) -> PayloadFactory:
-    version = protocol_version or DEFAULT_PROTOCOL_VERSION
+    settings = (
+        cast(ServerSettings, app.state.server_settings)
+        if app is not None and hasattr(app.state, "server_settings")
+        else None
+    )
+    version, error_message = negotiate_protocol_version(protocol_version, settings)
+    if version is None:
+        raise ValueError(error_message or "Unsupported protocolVersion")
     factory_cls = _FACTORY_BY_PROTOCOL_VERSION.get(version, PayloadFactory)
     return factory_cls(protocol_version=version, app=app)
 

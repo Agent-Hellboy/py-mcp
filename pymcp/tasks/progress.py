@@ -75,16 +75,18 @@ class ProgressTracker:
         if not progress_token or progress_token not in self.active_progress:
             return
 
-        progress_info = self.active_progress[progress_token]
-        progress_info["current"] = progress_info.get("total") or progress_info["current"]
+        progress_info = self.active_progress.pop(progress_token, None)
+        if progress_info is None:
+            return
+        final_current = progress_info["total"] if progress_info.get("total") is not None else progress_info["current"]
+        final_message = message if message is not None else progress_info.get("message")
         await self._send_notification(
             progress_token,
-            progress_info["current"],
+            final_current,
             total=progress_info.get("total"),
-            message=message or progress_info.get("message"),
+            message=final_message,
             task_id=progress_info.get("task_id"),
         )
-        self.active_progress.pop(progress_token, None)
 
     async def set_progress(
         self,
@@ -165,7 +167,7 @@ def build_progress_notification(
     }
     if total is not None:
         params["total"] = total
-    if message:
+    if message is not None:
         params["message"] = message
 
     payload: JSONObject = {

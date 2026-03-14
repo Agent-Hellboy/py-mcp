@@ -24,6 +24,7 @@ class CancellationManager:
         self._cancellation_callbacks: dict[str, CancellationCallback] = {}
         self._cancelled_reasons: dict[str, str | None] = {}
         self._cancel_events: dict[str, asyncio.Event] = {}
+        self._cleared_requests: set[str] = set()
 
     def create_token(self, request_id: Any = None) -> str:
         """Create a normalized cancellation token for a request ID."""
@@ -31,7 +32,15 @@ class CancellationManager:
         if request_id is None or isinstance(request_id, bool):
             return str(uuid4())
         token = str(request_id)
-        return token or str(uuid4())
+        token = token or str(uuid4())
+        self._cancelled_requests.discard(token)
+        self._cancellation_callbacks.pop(token, None)
+        self._cancelled_reasons.pop(token, None)
+        self._cleared_requests.discard(token)
+        event = self._cancel_events.get(token)
+        if event is not None and event.is_set():
+            self._cancel_events[token] = asyncio.Event()
+        return token
 
     def register_callback(self, token: str, callback: CancellationCallback) -> None:
         """Register a callback to run when the token is cancelled."""
@@ -46,6 +55,7 @@ class CancellationManager:
 
         self._cancelled_requests.add(token)
         self._cancelled_reasons[token] = reason
+        self._cleared_requests.discard(token)
         event = self._cancel_events.get(token)
         if event is not None:
             event.set()
@@ -71,15 +81,20 @@ class CancellationManager:
         self._cancelled_requests.discard(token)
         self._cancellation_callbacks.pop(token, None)
         self._cancelled_reasons.pop(token, None)
-        event = self._cancel_events.pop(token, None)
-        if event is not None:
-            event.set()
+        self._cleared_requests.add(token)
+        event = self._cancel_events.get(token)
+        if event is None:
+            event = asyncio.Event()
+            self._cancel_events[token] = event
+        event.set()
 
     async def wait(self, token: str) -> bool:
         """Wait until a token is cancelled or cleared."""
 
         if self.is_cancelled(token):
             return True
+        if token in self._cleared_requests:
+            return False
         event = self._cancel_events.get(token)
         if event is None:
             event = asyncio.Event()

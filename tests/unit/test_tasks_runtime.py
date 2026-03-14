@@ -8,6 +8,7 @@ from pymcp.runtime.dispatch import process_jsonrpc_message
 from pymcp.security.authn import Principal
 from pymcp.session.store import get_session_manager
 from pymcp.settings import CapabilitySettings, ServerSettings
+from pymcp.tasks.engine import TaskManager
 
 
 pytestmark = pytest.mark.anyio
@@ -314,3 +315,140 @@ async def test_tool_results_preserve_rich_payloads_for_direct_and_task_calls():
     )
     assert result_response.payload["result"]["content"][0]["text"] == "done"
     assert result_response.payload["result"]["structuredContent"] == {"ok": True, "items": [1, 2, 3]}
+
+
+async def test_tool_argument_named_task_is_not_treated_as_metadata():
+    @tool_registry.register(name="echo_task_argument")
+    def echo_task_argument(task: str) -> str:
+        return task
+
+    app = create_app(middleware_config=None)
+    manager = get_session_manager(app)
+    session = manager.create_session()
+    await _initialize_ready(app, session.session_id)
+
+    response = await process_jsonrpc_message(
+        session.session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "echo_task_argument",
+                "arguments": {"task": "deploy"},
+            },
+        },
+        app=app,
+        direct_response=True,
+    )
+
+    assert response.payload["result"]["content"][0]["text"] == "deploy"
+
+
+async def test_tool_execution_errors_do_not_leak_exception_text():
+    @tool_registry.register(name="boom_tool")
+    def boom_tool() -> str:
+        raise RuntimeError("secret backend detail")
+
+    app = create_app(middleware_config=None)
+    manager = get_session_manager(app)
+    session = manager.create_session()
+    await _initialize_ready(app, session.session_id)
+
+    response = await process_jsonrpc_message(
+        session.session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "boom_tool", "arguments": {}},
+        },
+        app=app,
+        direct_response=True,
+    )
+
+    assert response.payload["error"]["code"] == -32603
+    assert response.payload["error"]["message"] == "Error executing tool 'boom_tool'"
+    assert "secret backend detail" not in response.payload["error"]["message"]
+
+
+async def test_tasks_result_times_out_when_task_never_finishes():
+    app = create_app(middleware_config=None)
+    app.state.task_manager = TaskManager(result_wait_timeout_ms=10)
+    manager = get_session_manager(app)
+    session = manager.create_session()
+    await _initialize_ready(app, session.session_id)
+
+    record = await app.state.task_manager.create_task(session.session_id, ttl=1000)
+    response = await process_jsonrpc_message(
+        session.session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tasks/result",
+            "params": {"taskId": record.task_id},
+        },
+        app=app,
+        direct_response=True,
+    )
+
+    assert response.payload["error"]["code"] == -32005
+    assert response.payload["error"]["message"] == "Timed out waiting for task completion"
+
+
+async def test_expired_tasks_clear_running_handles():
+    manager = TaskManager()
+    record = await manager.create_task("session-1", ttl=1)
+    handle = asyncio.get_running_loop().create_future()
+    await manager.set_task_handle(record.task_id, handle)
+
+    await asyncio.sleep(0.01)
+
+    assert await manager.get_task_unchecked(record.task_id) is None
+    assert record.task_id not in manager._task_handles
+    assert handle.cancelled() is True
+
+
+async def test_tools_list_fails_closed_when_filtering_errors():
+    @tool_registry.register(name="fail_closed_visible_tool")
+    def fail_closed_visible_tool() -> str:
+        return "ok"
+
+    class _BrokenToolFilterAuthorizer:
+        def authorize(self, principal, request) -> None:
+            _ = principal, request
+
+        def filter_capabilities(self, principal, capabilities):
+            _ = principal
+            return dict(capabilities)
+
+        def filter_tools(self, principal, tools):
+            _ = principal, tools
+            raise RuntimeError("boom")
+
+        def filter_prompts(self, principal, prompts):
+            _ = principal
+            return list(prompts)
+
+        def filter_resources(self, principal, resources):
+            _ = principal
+            return list(resources)
+
+    app = create_app(middleware_config=None)
+    app.state.authorizer = _BrokenToolFilterAuthorizer()
+    manager = get_session_manager(app)
+    session = manager.create_session()
+    await _initialize_ready(app, session.session_id)
+
+    response = await process_jsonrpc_message(
+        session.session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+        },
+        app=app,
+        direct_response=True,
+    )
+
+    assert response.payload["result"]["tools"] == []

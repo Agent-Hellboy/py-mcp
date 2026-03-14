@@ -80,6 +80,17 @@ def _post_headers(request: Request, session_id: str) -> dict[str, str]:
     return {"MCP-Session-Id": session_id}
 
 
+def _apply_session_principal(session, request_principal) -> Response | None:
+    if request_principal is None:
+        return None
+    if session.principal is None:
+        session.principal = request_principal
+        return None
+    if session.principal != request_principal:
+        return _jsonrpc_http_error(403, FORBIDDEN, "Session principal mismatch")
+    return None
+
+
 def _format_sse(data: str, *, event: str | None = None, event_id: str | None = None) -> str:
     lines: list[str] = []
     if event_id:
@@ -170,19 +181,24 @@ async def mcp_post(request: Request) -> Response:
     session_id = get_mcp_session_id(request)
     method = data.get("method")
     method_name = method if isinstance(method, str) else None
+    request_principal = getattr(request.state, "principal", None)
 
     if not session_id:
         if method_name != "initialize":
             return _jsonrpc_http_error(400, INVALID_PARAMS, "MCP-Session-Id header required")
         session = session_manager.create_session()
         session_id = session.session_id
-        session.principal = getattr(request.state, "principal", None)
+        principal_error = _apply_session_principal(session, request_principal)
+        if principal_error is not None:
+            return principal_error
     elif session_manager.get_session(session_id) is None:
         return _jsonrpc_http_error(404, SESSION_NOT_FOUND, "Session not found")
     else:
         session = session_manager.get_session(session_id)
         if session is not None:
-            session.principal = getattr(request.state, "principal", None)
+            principal_error = _apply_session_principal(session, request_principal)
+            if principal_error is not None:
+                return principal_error
 
     if method_name is None:
         rpc_id = data.get("id")

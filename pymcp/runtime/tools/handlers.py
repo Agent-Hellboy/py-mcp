@@ -7,6 +7,7 @@ import inspect
 
 import anyio
 
+from ...observability.logging import get_logger
 from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject
 from ...tasks.cancellation import CancellationToken, CancelledError
@@ -16,6 +17,8 @@ from ..payloads import normalize_tool_result
 from ..types import DispatchContext, DispatchResult, make_result
 from .execution import run_tool_as_task
 from .invocation import ToolArgs, ToolInvocationError, prepare_tool_invocation
+
+logger = get_logger(__name__)
 
 
 async def _handle_tools_call_task_augmented(
@@ -92,7 +95,11 @@ async def handle_tools_list(ctx: DispatchContext) -> DispatchResult:
                     tools = [entry for entry in tools_value if isinstance(entry, dict)]
                     result_value["tools"] = authorizer.filter_tools(principal, tools)
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Failed to filter tools for principal %s",
+                        principal.subject if principal is not None else None,
+                    )
+                    result_value["tools"] = []
 
     await ctx.maybe_enqueue(payload)
     return make_result(200, json_response=True, payload=payload)
@@ -122,8 +129,6 @@ async def handle_tools_call(ctx: DispatchContext) -> DispatchResult:
     args_value = params.get("arguments")
     args: JSONObject = args_value if isinstance(args_value, dict) else {}
     task_params = params.get("task")
-    if task_params is None and isinstance(args, dict):
-        task_params = args.get("task")
 
     tool = ctx.registry_manager.get_tool_registry().get(tool_name)
     if tool is None:
@@ -255,11 +260,12 @@ async def handle_tools_call(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         ctx.cancellation_manager.clear(token)
         return make_result(200, json_response=True, payload=payload)
-    except Exception as exc:
+    except Exception:
+        logger.exception("Error executing tool '%s'", tool_name)
         payload = ctx.payloads().error(
             ctx.rpc_id,
             MCPErrorCode.INTERNAL_ERROR,
-            f"Error executing tool '{tool_name}': {exc}",
+            f"Error executing tool '{tool_name}'",
         )
         await ctx.maybe_enqueue(payload)
         ctx.cancellation_manager.clear(token)

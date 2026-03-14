@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from pymcp import create_app
@@ -41,3 +43,23 @@ async def test_cancellation_token_raises_after_cancel():
 
     with pytest.raises(CancelledError):
         token.check_cancelled()
+
+
+async def test_cleared_token_wait_returns_false_and_reused_tokens_reset():
+    app = create_app(middleware_config=None)
+    manager = get_cancellation_manager(app)
+
+    token_value = manager.create_token("req-789")
+    waiter = asyncio.create_task(manager.wait(token_value))
+    await asyncio.sleep(0)
+    manager.clear(token_value)
+
+    assert await waiter is False
+
+    reused_token = manager.create_token("req-789")
+    waiter = asyncio.create_task(manager.wait(reused_token))
+    await asyncio.sleep(0)
+    assert waiter.done() is False
+
+    manager.cancel(reused_token)
+    assert await waiter is True

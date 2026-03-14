@@ -154,7 +154,12 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
         raw_rules = config.get("rules") or []
         if not isinstance(raw_rules, list):
             raise ValueError("authz.rules must be a list")
-        self._rules = [Rule.from_dict(rule) for rule in raw_rules if isinstance(rule, Mapping)]
+        rules: list[Rule] = []
+        for rule in raw_rules:
+            if not isinstance(rule, Mapping):
+                raise ValueError("authz.rules entries must be objects")
+            rules.append(Rule.from_dict(rule))
+        self._rules = rules
 
         self._groups_claim = str(config.get("groups_claim") or config.get("groupsClaim") or "groups")
         group_map = config.get("groups_to_roles") or config.get("groupsToRoles") or {}
@@ -202,8 +207,9 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
                 if not fnmatch.fnmatch(str(tool_name), rule.tool):
                     continue
 
+            has_allow_conditions = bool(rule.allow_subjects or rule.allow_roles or rule.allow_scopes)
             if principal is None:
-                if rule.allow_anonymous:
+                if rule.allow_anonymous or not has_allow_conditions:
                     return rule
                 continue
 
@@ -211,7 +217,6 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
             roles = self._effective_roles(principal)
             scopes = self._effective_scopes(principal)
 
-            has_allow_conditions = bool(rule.allow_subjects or rule.allow_roles or rule.allow_scopes)
             if not has_allow_conditions:
                 return rule
             if rule.allow_subjects and subject in rule.allow_subjects:

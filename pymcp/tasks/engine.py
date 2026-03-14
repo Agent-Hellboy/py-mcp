@@ -181,11 +181,17 @@ class TaskRecord:
 class TaskManager:
     """Manage tasks per session with TTL enforcement."""
 
-    def __init__(self, default_ttl_ms: int = 60 * 60 * 1000, default_poll_interval: int = 5000):
+    def __init__(
+        self,
+        default_ttl_ms: int = 60 * 60 * 1000,
+        default_poll_interval: int = 5000,
+        result_wait_timeout_ms: int = 5 * 60 * 1000,
+    ):
         self._tasks: dict[str, TaskRecord] = {}
         self._lock = asyncio.Lock()
         self._default_ttl = default_ttl_ms
         self._default_poll_interval = default_poll_interval
+        self.result_wait_timeout_ms = max(1, int(result_wait_timeout_ms))
         self._task_handles: dict[str, asyncio.Future[object]] = {}
 
     async def create_task(
@@ -220,13 +226,21 @@ class TaskManager:
     def _can_access(record: TaskRecord, session_id: str, principal: Principal | None) -> bool:
         return record.owner_key == _task_owner_key(session_id, principal)
 
+    def _expire_task(self, task_id: str) -> None:
+        record = self._tasks.pop(task_id, None)
+        handle = self._task_handles.pop(task_id, None)
+        if handle is not None and not handle.done():
+            handle.cancel()
+        if record is not None:
+            record.execution_handle = None
+
     async def get_task_unchecked(self, task_id: str) -> TaskRecord | None:
         async with self._lock:
             record = self._tasks.get(task_id)
             if not record:
                 return None
             if record.is_expired(_utc_now()):
-                self._tasks.pop(task_id, None)
+                self._expire_task(task_id)
                 return None
             return record
 
@@ -295,7 +309,7 @@ class TaskManager:
             if not record or not self._can_access(record, session_id, principal):
                 return None
             if record.is_expired(_utc_now()):
-                self._tasks.pop(task_id, None)
+                self._expire_task(task_id)
                 return None
             return record
 
@@ -311,7 +325,7 @@ class TaskManager:
             now = _utc_now()
             expired = [task_id for task_id, record in self._tasks.items() if record.is_expired(now)]
             for task_id in expired:
-                self._tasks.pop(task_id, None)
+                self._expire_task(task_id)
             tasks = [
                 record
                 for record in self._tasks.values()

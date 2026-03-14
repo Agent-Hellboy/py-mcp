@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject, JSONValue
 from ...session.notifications import send_notification
@@ -190,7 +192,30 @@ async def handle_tasks_result(ctx: DispatchContext) -> DispatchResult:
 
     meta: JSONObject = {"io.modelcontextprotocol/related-task": {"taskId": task_id}}
     if not record.is_terminal():
-        await record.completion_event.wait()
+        try:
+            await asyncio.wait_for(
+                record.completion_event.wait(),
+                timeout=ctx.task_manager.result_wait_timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError:
+            record = await ctx.task_manager.get_task(task_id, ctx.session_id, principal=ctx.session.principal)
+            if record is None:
+                payload = ctx.payloads().error(
+                    ctx.rpc_id,
+                    MCPErrorCode.INVALID_PARAMS,
+                    "Failed to retrieve task: Task has expired",
+                )
+            elif record.is_terminal():
+                payload = None
+            else:
+                payload = ctx.payloads().error(
+                    ctx.rpc_id,
+                    MCPErrorCode.TIMEOUT,
+                    "Timed out waiting for task completion",
+                )
+            if payload is not None:
+                await ctx.maybe_enqueue(payload)
+                return make_result(200, json_response=True, payload=payload)
         record = await ctx.task_manager.get_task(task_id, ctx.session_id, principal=ctx.session.principal)
         if not record:
             payload = ctx.payloads().error(

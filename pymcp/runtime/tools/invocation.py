@@ -39,7 +39,7 @@ def prepare_tool_invocation(
     tool_args: ToolArgs = {
         key: value
         for key, value in provided_args.items()
-        if key not in ("cancel_token", "task_context", "request_context", "task")
+        if key not in ("cancel_token", "task_context", "request_context")
     }
 
     if "cancel_token" in signature.parameters and cancel_token is not None:
@@ -53,7 +53,6 @@ def prepare_tool_invocation(
     validation_args.pop("cancel_token", None)
     validation_args.pop("task_context", None)
     validation_args.pop("request_context", None)
-    validation_args.pop("task", None)
 
     ok, err = validate_tool_arguments(tool_info, validation_args)
     if not ok:

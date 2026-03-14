@@ -14,7 +14,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "jsonschema",
-    "pydantic>=2",
+    "pydantic>=2.7.0,<3",
     "typing-extensions>=4.0",
     "uvicorn",
     "requests"

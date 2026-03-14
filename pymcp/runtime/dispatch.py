@@ -196,7 +196,7 @@ class Dispatcher:
                 status=200,
                 code=MCPErrorCode.INVALID_REQUEST,
                 message=error_message,
-                rpc_id=None,
+                rpc_id=_rpc_id_from_data(data) if "id" in data else None,
             )
 
     @staticmethod

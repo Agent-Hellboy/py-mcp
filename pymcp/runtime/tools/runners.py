@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import inspect
 import os
 from concurrent.futures import ProcessPoolExecutor
@@ -86,6 +87,19 @@ async def _await_tool_result(awaitable: Awaitable[_ToolResult]) -> _ToolResult:
     return await awaitable
 
 
+def _run_sync_tool_for_process(tool_func: SyncToolFunction, tool_args: ToolArgs) -> object:
+    return tool_func(**tool_args)
+
+
+async def _discard_stream(stream: asyncio.StreamReader | None) -> None:
+    if stream is None:
+        return
+    while True:
+        chunk = await stream.read(4096)
+        if not chunk:
+            return
+
+
 class ToolRunner(Protocol):
     async def run(
         self,
@@ -166,12 +180,13 @@ class ProcessToolRunner:
             )
         sync_tool_func: SyncToolFunction = tool_func
         loop = asyncio.get_running_loop()
-
-        def run_sync() -> object:
-            return sync_tool_func(**tool_args)
-
         executor = _get_process_executor(app)
-        exec_future: asyncio.Future[object] = loop.run_in_executor(executor, run_sync)
+        exec_future: asyncio.Future[object] = loop.run_in_executor(
+            executor,
+            _run_sync_tool_for_process,
+            sync_tool_func,
+            tool_args,
+        )
         await task_manager.set_task_handle(task_id, exec_future)
         result = await exec_future
         return exec_future, result
@@ -275,46 +290,56 @@ class SubprocessToolRunner:
                 )
 
             assert proc.stdout is not None
+            stderr_task = (
+                asyncio.create_task(_discard_stream(proc.stderr))
+                if proc.stderr is not None
+                else None
+            )
             collected = bytearray()
             line_no = 0
-            while True:
-                if spec.timeout_ms is not None and spec.timeout_ms > 0:
-                    try:
-                        line = await asyncio.wait_for(proc.stdout.readline(), timeout=spec.timeout_ms / 1000)
-                    except asyncio.TimeoutError:
+            try:
+                while True:
+                    if spec.timeout_ms is not None and spec.timeout_ms > 0:
+                        try:
+                            line = await asyncio.wait_for(proc.stdout.readline(), timeout=spec.timeout_ms / 1000)
+                        except asyncio.TimeoutError:
+                            proc.kill()
+                            await proc.wait()
+                            raise ToolInvocationError(MCPErrorCode.TIMEOUT, "Tool subprocess timed out")
+                    else:
+                        line = await proc.stdout.readline()
+
+                    if not line:
+                        break
+                    line_no += 1
+                    collected.extend(line)
+                    if self._max_output_bytes and len(collected) > self._max_output_bytes:
                         proc.kill()
                         await proc.wait()
-                        raise ToolInvocationError(MCPErrorCode.TIMEOUT, "Tool subprocess timed out")
-                else:
-                    line = await proc.stdout.readline()
-
-                if not line:
-                    break
-                line_no += 1
-                collected.extend(line)
-                if self._max_output_bytes and len(collected) > self._max_output_bytes:
-                    proc.kill()
-                    await proc.wait()
-                    raise ToolInvocationError(
-                        MCPErrorCode.INVALID_PARAMS,
-                        "Tool subprocess output exceeded maxOutputBytes",
+                        raise ToolInvocationError(
+                            MCPErrorCode.INVALID_PARAMS,
+                            "Tool subprocess output exceeded maxOutputBytes",
+                        )
+                    text = line.decode("utf-8", errors="replace").rstrip("\n")
+                    await _maybe_send_log_line(
+                        self._task_context,
+                        line=text,
+                        sequence=line_no,
+                        streaming=self._streaming,
                     )
-                text = line.decode("utf-8", errors="replace").rstrip("\n")
-                await _maybe_send_log_line(
-                    self._task_context,
-                    line=text,
-                    sequence=line_no,
-                    streaming=self._streaming,
-                )
 
-            exit_code = await proc.wait()
-            output_text = collected.decode("utf-8", errors="replace")
-            if exit_code != 0:
-                raise ToolInvocationError(
-                    MCPErrorCode.TOOL_EXECUTION_FAILED,
-                    f"Tool subprocess exited with code {exit_code}",
-                )
-            return output_text
+                exit_code = await proc.wait()
+                output_text = collected.decode("utf-8", errors="replace")
+                if exit_code != 0:
+                    raise ToolInvocationError(
+                        MCPErrorCode.TOOL_EXECUTION_FAILED,
+                        f"Tool subprocess exited with code {exit_code}",
+                    )
+                return output_text
+            finally:
+                if stderr_task is not None:
+                    with suppress(Exception):
+                        await stderr_task
 
         task: asyncio.Future[object] = asyncio.create_task(run_subprocess())
         await task_manager.set_task_handle(task_id, task)

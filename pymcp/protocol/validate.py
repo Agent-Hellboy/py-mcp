@@ -77,6 +77,9 @@ def validate_jsonrpc_request(payload: JSONValue) -> tuple[bool, str]:
         return False, "Missing or invalid method"
     if "id" not in payload:
         return False, "Request id is required"
+    params = payload.get("params")
+    if "params" in payload and not isinstance(params, (dict, list)):
+        return False, "Params must be an object or array"
     rpc_id = payload.get("id")
     if rpc_id is None:
         return False, "Request id must not be null"

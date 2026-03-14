@@ -20,6 +20,13 @@ def _env_int(name: str) -> int | None:
         return None
 
 
+def _env_positive_int(name: str) -> int | None:
+    value = _env_int(name)
+    if value is None or value <= 0:
+        return None
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeLimits:
     session_outbound_queue_maxsize: int = 1000
@@ -30,17 +37,17 @@ class RuntimeLimits:
     @classmethod
     def from_env(cls) -> "RuntimeLimits":
         defaults = cls()
-        session_q = _env_int("PYMCP_SESSION_OUTBOUND_QUEUE_MAXSIZE")
-        max_req = _env_int("PYMCP_MAX_REQUEST_BYTES")
-        tool_out = _env_int("PYMCP_TOOL_MAX_OUTPUT_BYTES")
-        tool_timeout = _env_int("PYMCP_TOOL_DEFAULT_TIMEOUT_MS")
+        session_q = _env_positive_int("PYMCP_SESSION_OUTBOUND_QUEUE_MAXSIZE")
+        max_req = _env_positive_int("PYMCP_MAX_REQUEST_BYTES")
+        tool_out = _env_positive_int("PYMCP_TOOL_MAX_OUTPUT_BYTES")
+        tool_timeout = _env_positive_int("PYMCP_TOOL_DEFAULT_TIMEOUT_MS")
         return cls(
             session_outbound_queue_maxsize=(
                 session_q if session_q is not None else defaults.session_outbound_queue_maxsize
             ),
-            max_request_bytes=max_req,
+            max_request_bytes=max_req if max_req is not None else defaults.max_request_bytes,
             tool_max_output_bytes=tool_out if tool_out is not None else defaults.tool_max_output_bytes,
-            tool_default_timeout_ms=tool_timeout,
+            tool_default_timeout_ms=tool_timeout if tool_timeout is not None else defaults.tool_default_timeout_ms,
         )
 
 

@@ -189,7 +189,10 @@ class ToolRegistry(_RegistryBase):
         self._tools: dict[str, ToolDefinition] = {}
 
     def clear(self) -> None:
+        if not self._tools:
+            return
         self._tools.clear()
+        self._notify_listeners()
 
     def _register_tool(
         self,
@@ -300,7 +303,10 @@ class PromptRegistry(_RegistryBase):
         self._prompts: dict[str, PromptDefinition] = {}
 
     def clear(self) -> None:
+        if not self._prompts:
+            return
         self._prompts.clear()
+        self._notify_listeners()
 
     def register(
         self,
@@ -365,7 +371,10 @@ class ResourceRegistry(_RegistryBase):
         self._update_listeners: list[ResourceUpdatedListener] = []
 
     def clear(self) -> None:
+        if not self._resources:
+            return
         self._resources.clear()
+        self._notify_listeners()
 
     def add_update_listener(self, listener: ResourceUpdatedListener) -> None:
         if callable(listener):

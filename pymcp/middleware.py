@@ -95,20 +95,19 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         request.state.principal = principal
 
-        if rpc_method is None:
-            authz_request = build_authz_request(
-                http_method=request.method,
-                path=request.url.path,
-                rpc_method=rpc_method,
-                params=params,
+        authz_request = build_authz_request(
+            http_method=request.method,
+            path=request.url.path,
+            rpc_method=rpc_method,
+            params=params,
+        )
+        try:
+            self._authorizer.authorize(principal, authz_request)
+        except AuthorizationError as exc:
+            return JSONResponse(
+                status_code=403,
+                content=build_error_response(rpc_id, MCPErrorCode.FORBIDDEN, str(exc)),
             )
-            try:
-                self._authorizer.authorize(principal, authz_request)
-            except AuthorizationError as exc:
-                return JSONResponse(
-                    status_code=403,
-                    content=build_error_response(rpc_id, MCPErrorCode.FORBIDDEN, str(exc)),
-                )
 
         return await call_next(request)
 
@@ -191,5 +190,6 @@ __all__ = [
     "ErrorHandlingConfig",
     "LoggingConfigInput",
     "MiddlewareConfig",
+    "SecurityMiddleware",
     "setup_middleware",
 ]

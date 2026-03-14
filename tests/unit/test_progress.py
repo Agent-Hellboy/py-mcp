@@ -43,3 +43,9 @@ def test_build_progress_notification_includes_task_meta():
     assert payload["method"] == "notifications/progress"
     assert payload["params"]["progressToken"] == "pt-2"
     assert payload["_meta"]["io.modelcontextprotocol/related-task"]["taskId"] == "task-1"
+
+
+def test_build_progress_notification_preserves_empty_message():
+    payload = build_progress_notification("pt-3", 1, message="")
+
+    assert payload["params"]["message"] == ""

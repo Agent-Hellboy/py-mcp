@@ -7,6 +7,7 @@ from typing import cast
 
 from pydantic import ValidationError
 
+from ...observability.logging import get_logger
 from ...capabilities.registry import get_server_capabilities
 from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject
@@ -17,6 +18,8 @@ from ...protocol.validation_errors import format_pydantic_validation_error
 from ...session.elicitation import request_elicitation
 from ..types import DispatchContext, DispatchResult, make_result
 from .registry import rpc_method
+
+logger = get_logger(__name__)
 
 
 @rpc_method("initialize")
@@ -53,7 +56,10 @@ async def handle_initialize(ctx: DispatchContext) -> DispatchResult:
                 if result is not None:
                     result["capabilities"] = capabilities
         except Exception:
-            pass
+            logger.exception(
+                "Failed to filter capabilities for principal %s",
+                principal.subject if principal is not None else None,
+            )
 
     ctx.session.client_capabilities = dict(client_capabilities or {})
     ctx.session.client_info = dict(client_info)
