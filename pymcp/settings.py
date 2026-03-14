@@ -18,9 +18,17 @@ class CapabilitySettings:
     tools_list_changed: bool = False
     prompts_list_changed: bool = False
     resources_list_changed: bool = False
-    resources_subscribe: bool = False
+    resources_subscribe: bool = True
     advertise_empty_prompts: bool = False
     advertise_empty_resources: bool = False
+    roots_enabled: bool = True
+    roots_list_changed: bool = False
+    tasks_enabled: bool = True
+    tasks_tool_call: bool = True
+    tasks_list: bool = True
+    tasks_cancel: bool = True
+    elicitation_form: bool = True
+    elicitation_url: bool = False
 
 
 @dataclass(slots=True)

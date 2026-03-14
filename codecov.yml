@@ -1,0 +1,21 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+        threshold: 1%
+        paths:
+          - "pymcp"
+    patch:
+      default:
+        target: 65%
+        threshold: 1%
+        paths:
+          - "pymcp"
+
+ignore:
+  - "tests/**"
+  - "company/**"
+  - "docs/**"
+  - "mcp-server-fuzzer/**"
+  - "site/**"

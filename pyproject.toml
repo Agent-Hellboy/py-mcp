@@ -13,6 +13,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi",
+    "jsonschema",
+    "pydantic>=2.7.0,<3",
+    "typing-extensions>=4.0",
     "uvicorn",
     "requests"
 ]
@@ -20,6 +23,16 @@ license = {text = "MIT"}
 
 [project.urls]
 Homepage = "https://github.com/Agent-Hellboy/py-mcp"
+Documentation = "https://agent-hellboy.github.io/py-mcp/"
+Repository = "https://github.com/Agent-Hellboy/py-mcp"
+
+[project.optional-dependencies]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocs-minify-plugin>=0.8",
+    "pymdown-extensions>=10.14",
+]
 
 [tool.setuptools.packages.find]
 include = ["pymcp*"]
