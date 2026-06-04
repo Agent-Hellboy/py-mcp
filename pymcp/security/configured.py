@@ -194,18 +194,23 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
             return set()
         return set(principal.scopes or set())
 
-    def _evaluate(self, principal: Principal | None, request: AuthzRequest) -> Rule | None:
+    def _rule_matches_request(self, rule: Rule, request: AuthzRequest) -> bool:
         rpc_method = request.rpc_method or ""
         tool_name = request.tool_name
 
+        if not _matches_any(rule.methods, rpc_method):
+            return False
+        if rule.tool is not None:
+            if tool_name is None:
+                return False
+            if not fnmatch.fnmatch(str(tool_name), rule.tool):
+                return False
+        return True
+
+    def _evaluate(self, principal: Principal | None, request: AuthzRequest) -> Rule | None:
         for rule in self._rules:
-            if not _matches_any(rule.methods, rpc_method):
+            if not self._rule_matches_request(rule, request):
                 continue
-            if rule.tool is not None:
-                if tool_name is None:
-                    continue
-                if not fnmatch.fnmatch(str(tool_name), rule.tool):
-                    continue
 
             has_allow_conditions = bool(rule.allow_subjects or rule.allow_roles or rule.allow_scopes)
             if principal is None:
@@ -232,6 +237,47 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
 
         return None
 
+    def required_scopes_for(self, principal: Principal | None, request: AuthzRequest) -> tuple[str, ...]:
+        """Return scopes from matching allow rules that the principal does not have."""
+
+        current_scopes = self._effective_scopes(principal)
+        required: list[str] = []
+
+        for rule in self._rules:
+            if not self._rule_matches_request(rule, request):
+                continue
+            if rule.effect == "deny":
+                return ()
+            if rule.effect != "allow" or not rule.allow_scopes:
+                continue
+            for scope in rule.allow_scopes:
+                if scope not in required:
+                    required.append(scope)
+
+        missing = [
+            scope
+            for scope in required
+            if not any(fnmatch.fnmatch(current_scope, scope) for current_scope in current_scopes)
+        ]
+        return tuple(missing)
+
+    def _missing_scope_message(self, principal: Principal | None, request: AuthzRequest) -> str | None:
+        current_scopes = self._effective_scopes(principal)
+        for rule in self._rules:
+            if not self._rule_matches_request(rule, request):
+                continue
+            if rule.effect == "deny":
+                return None
+            if rule.effect != "allow" or not rule.allow_scopes or not rule.message:
+                continue
+            if not any(
+                fnmatch.fnmatch(current_scope, required_scope)
+                for required_scope in rule.allow_scopes
+                for current_scope in current_scopes
+            ):
+                return rule.message
+        return None
+
     def _is_allowed(self, principal: Principal | None, request: AuthzRequest) -> bool:
         rule = self._evaluate(principal, request)
         if rule is None:
@@ -244,7 +290,13 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
         if self._is_allowed(principal, request):
             return
         rule = self._evaluate(principal, request)
-        raise AuthorizationError(rule.message if rule and rule.message else "Forbidden")
+        required_scopes = self.required_scopes_for(principal, request)
+        raise AuthorizationError(
+            (rule.message if rule and rule.message else None)
+            or self._missing_scope_message(principal, request)
+            or "Forbidden",
+            required_scopes=required_scopes,
+        )
 
     def filter_capabilities(self, principal: Principal | None, capabilities: JSONObject) -> JSONObject:
         if not self._hide_caps:

@@ -12,6 +12,15 @@ from .authn import Principal
 class AuthorizationError(Exception):
     """Raised when a request is not authorized."""
 
+    def __init__(
+        self,
+        message: str = "Forbidden",
+        *,
+        required_scopes: Sequence[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.required_scopes = tuple(required_scopes or ())
+
 
 @dataclass(frozen=True)
 class AuthzRequest:

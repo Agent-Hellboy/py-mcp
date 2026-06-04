@@ -68,6 +68,7 @@ def create_app(
         authz=kwargs.get("authz"),
         require_authn=kwargs.get("require_authn", False),
         auth_exempt_paths=kwargs.get("auth_exempt_paths"),
+        oauth=kwargs.get("oauth"),
     )
     setup_middleware(app, config)
     app.include_router(router)

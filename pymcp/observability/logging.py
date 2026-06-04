@@ -27,6 +27,10 @@ LAYER_COLOR = "\033[36m"
 DOMAIN_COLOR = "\033[94m"
 FLOW_COLOR = "\033[33m"
 STATE_COLOR = "\033[35m"
+EVENT_COLOR = "\033[1;35m"
+CLIENT_TO_SERVER_COLOR = "\033[1;36m"
+SERVER_TO_CLIENT_COLOR = "\033[1;32m"
+SERVER_STATE_COLOR = "\033[1;33m"
 
 
 def _use_color() -> bool:
@@ -44,6 +48,25 @@ class ColorFormatter(logging.Formatter):
 
     TAG_PATTERN = re.compile(r"\[(?P<tag>[A-Z0-9_\-]+)\]")
     STATE_PATTERN = re.compile(r"\b(wait_init|wait_initialized|ready|closed)\b", re.IGNORECASE)
+    DIRECTION_COLORS: Final[Mapping[str, str]] = MappingProxyType(
+        {
+            "client -> server": CLIENT_TO_SERVER_COLOR,
+            "server -> client": SERVER_TO_CLIENT_COLOR,
+            "server state": SERVER_STATE_COLOR,
+        }
+    )
+    EVENT_PATTERN = re.compile(
+        r"\b("
+        r"client connection started|"
+        r"client connection complete|"
+        r"handshake started|"
+        r"handshake complete|"
+        r"probe [a-z0-9_\-/ ]+|"
+        r"request received|"
+        r"response sent"
+        r")\b",
+        re.IGNORECASE,
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         formatted = super().format(record)
@@ -76,6 +99,20 @@ class ColorFormatter(logging.Formatter):
         if state_match:
             token = state_match.group(1)
             formatted = formatted.replace(token, f"{STATE_COLOR}{token}{RESET}", 1)
+
+        for phrase, color in self.DIRECTION_COLORS.items():
+            formatted = re.sub(
+                re.escape(phrase),
+                lambda match, selected_color=color: f"{selected_color}{match.group(0)}{RESET}",
+                formatted,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+
+        event_match = self.EVENT_PATTERN.search(formatted)
+        if event_match:
+            token = event_match.group(1)
+            formatted = formatted.replace(token, f"{EVENT_COLOR}{token}{RESET}", 1)
 
         return formatted
 
