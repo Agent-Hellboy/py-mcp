@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from uuid import uuid4
 
@@ -21,6 +20,7 @@ from ..runtime.payloads import (
 from ..session import get_session_store
 from ..settings import SUPPORTED_PROTOCOL_VERSIONS
 from .http_common import accept_contains, get_mcp_session_id, try_parse_json_body
+from .shutdown import ensure_shutdown_event, wait_queue_message
 
 
 router = APIRouter()
@@ -109,18 +109,25 @@ async def _stream_session_events(
     stream_id: str,
     *,
     heartbeat_interval: float = 10.0,
+    poll_interval: float = 1.0,
 ):
     manager = get_session_store(request.app)
+    shutdown = ensure_shutdown_event(request.app)
     yield ": connected\n\n"
 
     counter = 0
     try:
         while True:
-            if await request.is_disconnected():
+            if shutdown.is_set() or await request.is_disconnected():
                 break
-            try:
-                payload = await asyncio.wait_for(session.queue.get(), timeout=heartbeat_interval)
-            except asyncio.TimeoutError:
+            outcome, payload = await wait_queue_message(
+                session.queue,
+                shutdown=shutdown,
+                timeout=min(heartbeat_interval, poll_interval),
+            )
+            if outcome == "shutdown":
+                break
+            if outcome == "timeout":
                 yield ": ping\n\n"
                 continue
 
@@ -202,9 +209,8 @@ async def mcp_post(request: Request) -> Response:
 
     if method_name is None:
         rpc_id = data.get("id")
-        if isinstance(rpc_id, str) and session_manager.resolve_elicitation_response(session_id, rpc_id, data):
-            headers = _post_headers(request, session_id)
-            return Response(status_code=202, headers=headers)
+        if isinstance(rpc_id, str):
+            session_manager.resolve_pending_response(session_id, rpc_id, data)
         headers = _post_headers(request, session_id)
         return Response(status_code=202, headers=headers)
 

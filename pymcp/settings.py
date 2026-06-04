@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 SUPPORTED_PROTOCOL_VERSIONS = (
@@ -13,22 +14,25 @@ SUPPORTED_PROTOCOL_VERSIONS = (
 )
 
 
+JSONObject = dict[str, Any]
+
+
 @dataclass(slots=True)
 class CapabilitySettings:
+    # -- server capability knobs (advertised in initialize response) ------
     tools_list_changed: bool = False
     prompts_list_changed: bool = False
     resources_list_changed: bool = False
     resources_subscribe: bool = True
     advertise_empty_prompts: bool = False
     advertise_empty_resources: bool = False
-    roots_enabled: bool = True
-    roots_list_changed: bool = False
+    logging_enabled: bool = False
+    completions_enabled: bool = False
     tasks_enabled: bool = True
     tasks_tool_call: bool = True
     tasks_list: bool = True
     tasks_cancel: bool = True
-    elicitation_form: bool = True
-    elicitation_url: bool = False
+    experimental_features: dict[str, JSONObject] | None = None
 
 
 @dataclass(slots=True)

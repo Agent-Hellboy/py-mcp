@@ -209,29 +209,6 @@ class PayloadFactory:
             },
         )
 
-    def build_roots_list(self, rpc_id: RPCId) -> JSONObject:
-        roots_config: list[object] = []
-        if self.app is not None and hasattr(self.app.state, "roots"):
-            roots_config = getattr(self.app.state, "roots", [])
-
-        roots: list[JSONObject] = []
-        for root in roots_config:
-            if isinstance(root, Mapping):
-                uri = root.get("uri")
-                name = root.get("name")
-            elif isinstance(root, str):
-                uri = root
-                name = None
-            else:
-                continue
-            if isinstance(uri, str) and uri:
-                payload: JSONObject = {"uri": uri}
-                if isinstance(name, str) and name:
-                    payload["name"] = name
-                roots.append(payload)
-
-        return self.success(rpc_id, {"roots": roots})
-
     def _registry_manager(self):
         if self.app is None:
             raise RuntimeError("PayloadFactory requires app-bound registry access")

@@ -61,14 +61,14 @@ def release_plan() -> str:
 
 
 app = create_app(
-    roots=[{"uri": "file:///workspace", "name": "workspace"}],
     server_settings=ServerSettings(
         name="demo-server",
         version="0.1.0",
         capabilities=CapabilitySettings(
             resources_subscribe=True,
-            roots_enabled=True,
             tasks_enabled=True,
+            logging_enabled=True,
+            completions_enabled=True,
         ),
     ),
 )
@@ -117,18 +117,71 @@ The package-level registries are copied into an app-scoped registry manager when
 
 This keeps multiple app instances isolated from each other after startup.
 
-## Roots And Resources
+## Roots (Client Capability)
 
-Roots are configured on app creation:
+Per the MCP 2025-11-25 spec, roots are a **client** capability. The client
+declares `roots` support in its `initialize` request.  The server can then
+request the client's available roots:
 
 ```python
-app = create_app(
-    roots=[
-        {"uri": "file:///workspace", "name": "workspace"},
-        {"uri": "file:///workspace/docs", "name": "docs"},
-    ]
-)
+from pymcp.session.roots import request_roots_list
+
+roots = await request_roots_list(app, session_id)
 ```
+
+The client may also send `notifications/roots/list_changed` when its root set
+changes.  Register a callback to be notified:
+
+```python
+from pymcp.runtime.handlers.roots import on_roots_changed
+
+@on_roots_changed
+def handle_roots_changed(app, session_id):
+    # Re-request roots or update server state
+    pass
+```
+
+## Sampling (Client Capability)
+
+The server can request LLM completions from the client if the client declared
+`sampling` support:
+
+```python
+from pymcp.session.sampling import request_sampling
+
+result = await request_sampling(app, session_id, {
+    "messages": [{"role": "user", "content": {"type": "text", "text": "Hello"}}],
+    "maxTokens": 200,
+})
+```
+
+## Elicitation (Client Capability)
+
+The server can request structured information from the user through the client.
+Both `form` and `url` modes are supported:
+
+```python
+from pymcp.session.elicitation import request_elicitation
+
+rpc_id, response = await request_elicitation(app, session_id, {
+    "mode": "form",
+    "message": "Please enter your details.",
+    "requestedSchema": {"type": "object", "properties": {"name": {"type": "string"}}},
+})
+```
+
+## Logging
+
+When `logging_enabled=True`, the server can send structured log messages to
+connected clients:
+
+```python
+from pymcp.session.notifications import send_log_message
+
+await send_log_message(app, session_id, level="info", logger="myapp", data={"key": "value"})
+```
+
+## Resources
 
 Resources can be listed, read, subscribed to, and unsubscribed from through the built-in handlers. If `CapabilitySettings.resources_subscribe` is left enabled, clients can receive `notifications/resources/updated` when subscribed resources change.
 

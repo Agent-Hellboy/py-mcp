@@ -86,11 +86,30 @@ def build_cancelled_error(rpc_id: RPCId) -> JSONObject:
     return build_error_response(rpc_id, MCPErrorCode.CANCELLED, "Request was cancelled")
 
 
+def build_url_elicitation_required_error(
+    rpc_id: RPCId,
+    elicitations: list[JSONValue],
+    message: str = "This request requires more information.",
+) -> JSONObject:
+    """Build a URLElicitationRequiredError (-32042).
+
+    ``elicitations`` should be a list of dicts, each containing at least
+    ``mode``, ``elicitationId``, ``url``, and ``message``.
+    """
+    return build_error_response(
+        rpc_id,
+        MCPErrorCode.URL_ELICITATION_REQUIRED,
+        message,
+        data={"elicitations": elicitations},
+    )
+
+
 __all__ = [
     "MCPError",
     "MCPErrorCode",
     "build_cancelled_error",
     "build_error_response",
+    "build_url_elicitation_required_error",
     "build_internal_error",
     "build_invalid_params_error",
     "build_invalid_request_error",

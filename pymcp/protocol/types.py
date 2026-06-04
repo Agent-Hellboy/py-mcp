@@ -220,6 +220,119 @@ class ElicitationCompleteNotificationParams(BaseModel):
     elicitationId: str = Field(..., description="Elicitation identifier")
 
 
+# ---------------------------------------------------------------------------
+# Sampling types (server -> client)
+# ---------------------------------------------------------------------------
+
+
+class ModelHint(BaseModel):
+    name: str | None = Field(default=None, description="Model name hint (substring match)")
+
+
+class ModelPreferences(BaseModel):
+    hints: list[ModelHint] | None = Field(default=None, description="Ordered model hints")
+    costPriority: float | None = Field(default=None, description="Cost priority (0-1)")
+    speedPriority: float | None = Field(default=None, description="Speed priority (0-1)")
+    intelligencePriority: float | None = Field(default=None, description="Intelligence priority (0-1)")
+
+
+class ToolUseContent(BaseModel):
+    type: str = Field(default="tool_use", description="Content type")
+    id: str = Field(..., description="Tool use identifier")
+    name: str = Field(..., description="Tool name")
+    input: JSONObject = Field(..., description="Tool arguments")
+
+
+class ToolResultContent(BaseModel):
+    type: str = Field(default="tool_result", description="Content type")
+    toolUseId: str = Field(..., description="Matching tool use identifier")
+    content: list[TextContent | ImageContent | AudioContent] | None = Field(
+        default=None, description="Result content blocks"
+    )
+    isError: bool = Field(default=False, description="Whether the tool returned an error")
+
+
+class SamplingToolDefinition(BaseModel):
+    name: str = Field(..., description="Tool name")
+    description: str | None = Field(default=None, description="Tool description")
+    inputSchema: JSONObject = Field(..., description="JSON Schema for tool input")
+
+
+class ToolChoice(BaseModel):
+    mode: Literal["none", "auto", "required"] = Field(
+        default="auto", description="Tool use mode"
+    )
+
+
+SamplingContentBlock: TypeAlias = (
+    TextContent | ImageContent | AudioContent | ToolUseContent | ToolResultContent
+)
+
+
+class CreateMessageRequestParams(BaseModel):
+    messages: list[JSONObject] = Field(..., description="Conversation messages")
+    modelPreferences: ModelPreferences | None = Field(default=None, description="Model selection preferences")
+    systemPrompt: str | None = Field(default=None, description="System prompt")
+    includeContext: str | None = Field(default=None, description="Context inclusion (soft-deprecated)")
+    maxTokens: int = Field(..., description="Maximum tokens to generate")
+    tools: list[SamplingToolDefinition] | None = Field(default=None, description="Tools available to LLM")
+    toolChoice: ToolChoice | None = Field(default=None, description="Tool use control")
+
+
+class CreateMessageResult(BaseModel):
+    role: str = Field(..., description="Message role (assistant)")
+    content: JSONValue = Field(..., description="Response content")
+    model: str = Field(..., description="Model used")
+    stopReason: str | None = Field(default=None, description="Stop reason (endTurn, toolUse, etc.)")
+
+
+# ---------------------------------------------------------------------------
+# Logging types (server -> client notification)
+# ---------------------------------------------------------------------------
+
+
+class LoggingMessageNotificationParams(BaseModel):
+    level: str = Field(..., description="Log level (debug, info, warning, error, critical, alert, emergency)")
+    logger: str | None = Field(default=None, description="Logger name")
+    data: JSONValue | None = Field(default=None, description="Arbitrary log data")
+
+
+# ---------------------------------------------------------------------------
+# Completions types (client -> server)
+# ---------------------------------------------------------------------------
+
+
+class CompletionRef(BaseModel):
+    type: str = Field(..., description="Reference type (ref/prompt or ref/resource)")
+    name: str | None = Field(default=None, description="Prompt name (for ref/prompt)")
+    uri: str | None = Field(default=None, description="Resource URI (for ref/resource)")
+
+
+class CompletionArgument(BaseModel):
+    name: str = Field(..., description="Argument name")
+    value: str = Field(..., description="Partial argument value to complete")
+
+
+class CompleteRequestParams(BaseModel):
+    ref: CompletionRef = Field(..., description="Reference to complete against")
+    argument: CompletionArgument = Field(..., description="Argument to complete")
+
+
+class Completion(BaseModel):
+    values: list[str] = Field(..., description="Completion suggestions")
+    hasMore: bool = Field(default=False, description="Whether more completions exist")
+    total: int | None = Field(default=None, description="Total number of completions")
+
+
+class CompleteResult(BaseModel):
+    completion: Completion = Field(..., description="Completion result")
+
+
+# ---------------------------------------------------------------------------
+# Resource read
+# ---------------------------------------------------------------------------
+
+
 class ReadResourceRequestParams(BaseModel):
     uri: str = Field(..., description="Resource URI")
 
@@ -292,7 +405,14 @@ __all__ = [
     "CallToolResult",
     "CancelledNotification",
     "CancelledNotificationParams",
+    "CompleteRequestParams",
+    "CompleteResult",
+    "Completion",
+    "CompletionArgument",
+    "CompletionRef",
     "ContentBlock",
+    "CreateMessageRequestParams",
+    "CreateMessageResult",
     "CreateTaskResult",
     "ElicitationCompleteNotificationParams",
     "ElicitationCreateParams",
@@ -311,6 +431,9 @@ __all__ = [
     "ListResourcesResult",
     "ListRootsResult",
     "ListToolsResult",
+    "LoggingMessageNotificationParams",
+    "ModelHint",
+    "ModelPreferences",
     "ProgressNotification",
     "ProgressNotificationParams",
     "Prompt",
@@ -323,11 +446,16 @@ __all__ = [
     "ResourceContents",
     "ResourcesListChangedNotification",
     "Root",
+    "SamplingContentBlock",
+    "SamplingToolDefinition",
     "ServerInfo",
     "Task",
     "TasksListResult",
     "TextContent",
     "TextResourceContents",
     "Tool",
+    "ToolChoice",
+    "ToolResultContent",
+    "ToolUseContent",
     "ToolsListChangedNotification",
 ]

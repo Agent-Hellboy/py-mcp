@@ -42,11 +42,14 @@ def test_initialize_requires_auth_when_configured():
     assert session.principal.subject == "alice"
 
 
-async def test_roots_list_returns_configured_roots():
-    app = create_app(
-        middleware_config=None,
-        roots=[{"uri": "file:///workspace", "name": "workspace"}],
-    )
+async def test_roots_list_changed_notification_accepted():
+    """After refactoring, roots/list is no longer a server handler.
+
+    Instead, the client sends notifications/roots/list_changed to inform
+    the server that roots have changed.  This test verifies the server
+    accepts that notification without error.
+    """
+    app = create_app(middleware_config=None)
     manager = get_session_manager(app)
     session = manager.create_session()
 
@@ -56,7 +59,10 @@ async def test_roots_list_returns_configured_roots():
             "jsonrpc": "2.0",
             "id": 1,
             "method": "initialize",
-            "params": {"protocolVersion": "2025-06-18"},
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {"roots": {"listChanged": True}},
+            },
         },
         app=app,
         direct_response=True,
@@ -70,8 +76,8 @@ async def test_roots_list_returns_configured_roots():
 
     response = await process_jsonrpc_message(
         session.session_id,
-        {"jsonrpc": "2.0", "id": 2, "method": "roots/list"},
+        {"jsonrpc": "2.0", "method": "notifications/roots/list_changed"},
         app=app,
         direct_response=True,
     )
-    assert response.payload["result"]["roots"] == [{"uri": "file:///workspace", "name": "workspace"}]
+    assert response.status == 202

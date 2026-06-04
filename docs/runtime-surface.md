@@ -45,9 +45,16 @@
 - `resources/unsubscribe`
 - `notifications/resources/updated`
 
-### Roots
+### Roots (Client Capability)
 
-- `roots/list`
+Roots are a *client* capability. The server can request the client's roots
+via the `request_roots_list()` helper (sends `roots/list` to the client).
+
+- `notifications/roots/list_changed` (client -> server notification)
+
+### Completions
+
+- `completion/complete`
 
 ### Tasks
 
@@ -58,9 +65,26 @@
 - `notifications/tasks/status`
 - `notifications/progress`
 
+### Elicitation (Client Capability)
+
+Elicitation is a *client* capability. The server sends `elicitation/create`
+to the client via the `request_elicitation()` helper. Both `form` and `url`
+modes are supported.
+
+### Sampling (Client Capability)
+
+Sampling is a *client* capability. The server sends `sampling/createMessage`
+to the client via the `request_sampling()` helper.
+
+### Logging
+
+- `notifications/message` (server -> client log notification via `send_log_message()`)
+
 ## Capability Settings
 
 `CapabilitySettings` controls which fragments appear in `initialize.result.capabilities` and which optional runtime behaviors are enabled.
+
+Per the MCP 2025-11-25 spec, **server** capabilities (advertised in the initialize response) include: tools, prompts, resources, logging, completions, tasks, and experimental. **Client** capabilities (roots, sampling, elicitation) are declared by the client in the initialize request and are NOT part of server capability settings.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -70,14 +94,13 @@
 | `resources_subscribe` | `True` | Advertise and enable resource subscription support. |
 | `advertise_empty_prompts` | `False` | Expose a prompts capability even when no prompts are registered. |
 | `advertise_empty_resources` | `False` | Expose a resources capability even when no resources are registered. |
-| `roots_enabled` | `True` | Expose `roots` capability and handler. |
-| `roots_list_changed` | `False` | Advertise `roots.listChanged` support. |
+| `logging_enabled` | `False` | Advertise `logging` capability. |
+| `completions_enabled` | `False` | Advertise `completions` capability and enable `completion/complete` handler. |
 | `tasks_enabled` | `True` | Expose task capability fragments and task handlers. |
 | `tasks_tool_call` | `True` | Advertise task augmentation for `tools/call`. |
 | `tasks_list` | `True` | Advertise the `tasks/list` capability fragment. |
 | `tasks_cancel` | `True` | Advertise the `tasks/cancel` capability fragment. |
-| `elicitation_form` | `True` | Advertise form-based elicitation support. |
-| `elicitation_url` | `False` | Advertise URL-based elicitation support. |
+| `experimental_features` | `None` | Dict of experimental server features to advertise. |
 
 ## Server Metadata
 

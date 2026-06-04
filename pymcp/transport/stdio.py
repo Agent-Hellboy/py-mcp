@@ -49,7 +49,7 @@ class StdioTransport:
             rpc_id = payload.get("id")
             manager = get_session_manager(app)
             if isinstance(rpc_id, str):
-                manager.resolve_elicitation_response(session_id, rpc_id, payload)
+                manager.resolve_pending_response(session_id, rpc_id, payload)
             return None
         result = await process_jsonrpc_message(
             session_id,

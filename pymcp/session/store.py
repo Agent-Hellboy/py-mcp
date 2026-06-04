@@ -131,6 +131,9 @@ class SessionManager:
             return
         await lifecycle.close()
         session.lifecycle_state = SessionState.CLOSED
+        for future in session.pending_requests.values():
+            if not future.done():
+                future.cancel()
         for future in session.pending_elicitations.values():
             if not future.done():
                 future.cancel()
@@ -143,6 +146,43 @@ class SessionManager:
             return None
         await self.cleanup_session(session_id)
         return session
+
+    # -- generic pending outbound request tracking --------------------------
+
+    def register_pending_request(
+        self,
+        session_id: str,
+        rpc_id: str,
+        future: asyncio.Future[dict[str, Any]],
+    ) -> None:
+        """Track a pending outbound request (sampling, roots, etc.)."""
+        session = self._sessions.get(session_id)
+        if session is not None:
+            session.pending_requests[rpc_id] = future
+
+    def resolve_pending_response(
+        self,
+        session_id: str,
+        rpc_id: str,
+        payload: dict[str, Any],
+    ) -> bool:
+        """Resolve any pending outbound request by rpc_id."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return False
+        # Check generic pending_requests first
+        future = session.pending_requests.pop(rpc_id, None)
+        if future is not None and not future.done():
+            future.set_result(payload)
+            return True
+        # Fall back to legacy pending_elicitations
+        future = session.pending_elicitations.pop(rpc_id, None)
+        if future is not None and not future.done():
+            future.set_result(payload)
+            return True
+        return False
+
+    # -- elicitation-specific (legacy, delegates to generic) ---------------
 
     def register_elicitation_future(
         self,
@@ -226,6 +266,16 @@ class SessionManager:
             if session.lifecycle_state != SessionState.READY or not session.stream_attached:
                 continue
             safe_queue_put(get_session_outbound_queue(session), message)
+
+    async def shutdown(self) -> None:
+        """Close all sessions and cancel pending outbound work (server stop)."""
+        for session_id in list(self._sessions.keys()):
+            session = self._sessions.get(session_id)
+            if session is None:
+                continue
+            session.stream_attached = False
+            session.attached_stream_id = None
+            await self.cleanup_session(session_id)
 
 
 def get_session_manager(app: Any) -> SessionManager:

@@ -110,3 +110,58 @@ def attach_resource_updated_notifications(app: FastAPI) -> None:
         )
 
     resource_registry.add_update_listener(notify)
+
+
+# ---------------------------------------------------------------------------
+# Elicitation completion notification (server -> client)
+# ---------------------------------------------------------------------------
+
+
+async def send_elicitation_complete(
+    app: FastAPI,
+    session_id: str,
+    elicitation_id: str,
+) -> bool:
+    """Send ``notifications/elicitation/complete`` to the client.
+
+    Used after a URL-mode elicitation's out-of-band interaction finishes.
+    """
+    manager = get_session_manager(app)
+    session = manager.get_session(session_id)
+    notification: JSONObject = {
+        "jsonrpc": "2.0",
+        "method": "notifications/elicitation/complete",
+        "params": {"elicitationId": elicitation_id},
+    }
+    return await send_notification(session, notification)
+
+
+# ---------------------------------------------------------------------------
+# Logging notification (server -> client)
+# ---------------------------------------------------------------------------
+
+
+async def send_log_message(
+    app: FastAPI,
+    session_id: str,
+    level: str,
+    logger: str | None = None,
+    data: object = None,
+) -> bool:
+    """Send ``notifications/message`` (structured log) to the client.
+
+    Only sent when the server advertises the ``logging`` capability.
+    """
+    params: JSONObject = {"level": level}
+    if logger is not None:
+        params["logger"] = logger
+    if data is not None:
+        params["data"] = data
+    notification: JSONObject = {
+        "jsonrpc": "2.0",
+        "method": "notifications/message",
+        "params": params,
+    }
+    manager = get_session_manager(app)
+    session = manager.get_session(session_id)
+    return await send_notification(session, notification)

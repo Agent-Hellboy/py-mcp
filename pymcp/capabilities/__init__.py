@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from .registry import (
     ClientCapabilities,
-    ElicitationCapability,
+    CompletionsCapability,
+    LoggingCapability,
     PromptsCapability,
     ResourcesCapability,
-    RootsCapability,
     ServerCapabilities,
-    TasksCapability,
+    ServerExperimentalCapability,
+    ServerTasksCapability,
     ToolsCapability,
     build_capabilities,
     get_server_capabilities,
@@ -18,12 +19,13 @@ from .registry import (
 
 __all__ = [
     "ClientCapabilities",
-    "ElicitationCapability",
+    "CompletionsCapability",
+    "LoggingCapability",
     "PromptsCapability",
     "ResourcesCapability",
-    "RootsCapability",
     "ServerCapabilities",
-    "TasksCapability",
+    "ServerExperimentalCapability",
+    "ServerTasksCapability",
     "ToolsCapability",
     "build_capabilities",
     "get_server_capabilities",

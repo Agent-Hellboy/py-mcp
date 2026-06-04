@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 JSONObject = dict[str, Any]
 
 
+# ---------------------------------------------------------------------------
+# Server capability providers
+# ---------------------------------------------------------------------------
+
+
 class CapabilityProvider(Protocol):
     """Provides a capabilities fragment."""
 
@@ -62,18 +67,27 @@ class ResourcesCapability:
 
 
 @dataclass(slots=True)
-class RootsCapability:
-    list_changed: bool = False
-    enabled: bool = True
+class LoggingCapability:
+    enabled: bool = False
 
     def get_capabilities(self) -> JSONObject:
         if not self.enabled:
             return {}
-        return {"roots": {"listChanged": self.list_changed}}
+        return {"logging": {}}
 
 
 @dataclass(slots=True)
-class TasksCapability:
+class CompletionsCapability:
+    enabled: bool = False
+
+    def get_capabilities(self) -> JSONObject:
+        if not self.enabled:
+            return {}
+        return {"completions": {}}
+
+
+@dataclass(slots=True)
+class ServerTasksCapability:
     enabled: bool = False
     tools_call: bool = True
     list_supported: bool = True
@@ -93,19 +107,18 @@ class TasksCapability:
 
 
 @dataclass(slots=True)
-class ElicitationCapability:
-    form: bool = False
-    url: bool = False
+class ServerExperimentalCapability:
+    features: dict[str, JSONObject] | None = None
 
     def get_capabilities(self) -> JSONObject:
-        modes: JSONObject = {}
-        if self.form:
-            modes["form"] = {}
-        if self.url:
-            modes["url"] = {}
-        if not modes:
+        if not self.features:
             return {}
-        return {"elicitation": modes}
+        return {"experimental": dict(self.features)}
+
+
+# ---------------------------------------------------------------------------
+# build_capabilities – assembles the *server* capability declaration
+# ---------------------------------------------------------------------------
 
 
 def build_capabilities(
@@ -114,7 +127,12 @@ def build_capabilities(
     prompts: "PromptRegistry",
     resources: "ResourceRegistry",
 ) -> JSONObject:
-    """Build the server capability declaration for the current registries/settings."""
+    """Build the server capability declaration for the current registries/settings.
+
+    Per the MCP 2025-11-25 spec, server capabilities are: tools, prompts,
+    resources, logging, completions, tasks (server-side), and experimental.
+    Client-only capabilities (roots, sampling, elicitation) are NOT included.
+    """
 
     providers: list[CapabilityProvider] = [
         ToolsCapability(list_changed=settings.tools_list_changed),
@@ -129,26 +147,26 @@ def build_capabilities(
             advertise_empty=settings.advertise_empty_resources,
             available=bool(resources.get_resources()),
         ),
-        RootsCapability(
-            list_changed=settings.roots_list_changed,
-            enabled=settings.roots_enabled,
-        ),
-        TasksCapability(
+        LoggingCapability(enabled=settings.logging_enabled),
+        CompletionsCapability(enabled=settings.completions_enabled),
+        ServerTasksCapability(
             enabled=settings.tasks_enabled,
             tools_call=settings.tasks_tool_call,
             list_supported=settings.tasks_list,
             cancel_supported=settings.tasks_cancel,
         ),
-        ElicitationCapability(
-            form=settings.elicitation_form,
-            url=settings.elicitation_url,
-        ),
+        ServerExperimentalCapability(features=settings.experimental_features),
     ]
 
     capabilities: JSONObject = {}
     for provider in providers:
         capabilities.update(provider.get_capabilities())
     return capabilities
+
+
+# ---------------------------------------------------------------------------
+# ServerCapabilities – app-aware wrapper
+# ---------------------------------------------------------------------------
 
 
 class ServerCapabilities:
@@ -183,26 +201,112 @@ class ServerCapabilities:
         )
 
 
+# ---------------------------------------------------------------------------
+# ClientCapabilities – parsed from the initialize request
+# ---------------------------------------------------------------------------
+
+
 class ClientCapabilities:
-    """Client capability declarations from the initialize request."""
+    """Client capability declarations from the initialize request.
+
+    Per the MCP 2025-11-25 spec, client capabilities include: roots, sampling,
+    elicitation, tasks (client-side), and experimental.
+    """
 
     def __init__(self, capabilities: JSONObject | None = None):
         self.capabilities = dict(capabilities or {})
 
+    # -- generic ---------------------------------------------------------
+
     def supports(self, feature: str) -> bool:
+        """Check whether the client declared support for *feature*.
+
+        Tasks require explicit opt-in.  For other features, absence means
+        the client did not declare them (treat as unsupported for outbound
+        gating).
+        """
         if feature == "tasks":
-            return bool(self.capabilities.get("tasks"))
-        if feature == "roots":
-            return True
-        if feature not in self.capabilities:
-            return True
-        value = self.capabilities.get(feature)
-        if isinstance(value, bool):
-            return value
-        return True
+            return "tasks" in self.capabilities
+        return feature in self.capabilities
 
     def get_capabilities(self) -> JSONObject:
         return dict(self.capabilities)
+
+    # -- roots -----------------------------------------------------------
+
+    def supports_roots(self) -> bool:
+        return "roots" in self.capabilities
+
+    def supports_roots_list_changed(self) -> bool:
+        roots = self.capabilities.get("roots")
+        if not isinstance(roots, dict):
+            return False
+        return bool(roots.get("listChanged"))
+
+    # -- sampling --------------------------------------------------------
+
+    def supports_sampling(self) -> bool:
+        return "sampling" in self.capabilities
+
+    def supports_sampling_tools(self) -> bool:
+        sampling = self.capabilities.get("sampling")
+        if not isinstance(sampling, dict):
+            return False
+        return "tools" in sampling
+
+    # -- elicitation -----------------------------------------------------
+
+    def supports_elicitation(self, mode: str | None = None) -> bool:
+        """Return True if the client supports elicitation.
+
+        If *mode* is given (``"form"`` or ``"url"``), check that specific
+        mode.  An empty ``elicitation: {}`` object is treated as
+        ``form``-only for backwards compatibility with the spec.
+        """
+        elicit = self.capabilities.get("elicitation")
+        if elicit is None:
+            return False
+        if mode is None:
+            return True
+        if not isinstance(elicit, dict) or not elicit:
+            # Empty dict == form-only per spec backwards compatibility
+            return mode == "form"
+        return mode in elicit
+
+    # -- client-side tasks -----------------------------------------------
+
+    def supports_client_tasks(self) -> bool:
+        return "tasks" in self.capabilities
+
+    def supports_task_request(self, namespace: str, method: str) -> bool:
+        """Check client task-augmented request support.
+
+        E.g. ``supports_task_request("elicitation", "create")`` checks
+        ``capabilities.tasks.requests.elicitation.create``.
+        """
+        tasks = self.capabilities.get("tasks")
+        if not isinstance(tasks, dict):
+            return False
+        requests = tasks.get("requests")
+        if not isinstance(requests, dict):
+            return False
+        ns = requests.get(namespace)
+        if not isinstance(ns, dict):
+            return False
+        return method in ns
+
+    # -- experimental ----------------------------------------------------
+
+    def supports_experimental(self, key: str) -> bool:
+        exp = self.capabilities.get("experimental")
+        if not isinstance(exp, dict):
+            return False
+        return key in exp
+
+
+# ---------------------------------------------------------------------------
+# Negotiation
+# ---------------------------------------------------------------------------
 
 
 def negotiate_capabilities(
@@ -228,12 +332,13 @@ def get_server_capabilities(app: FastAPI) -> ServerCapabilities:
 
 __all__ = [
     "ClientCapabilities",
-    "ElicitationCapability",
+    "CompletionsCapability",
+    "LoggingCapability",
     "PromptsCapability",
     "ResourcesCapability",
-    "RootsCapability",
     "ServerCapabilities",
-    "TasksCapability",
+    "ServerExperimentalCapability",
+    "ServerTasksCapability",
     "ToolsCapability",
     "build_capabilities",
     "get_server_capabilities",

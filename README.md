@@ -6,7 +6,7 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-0f766e.svg)](https://agent-hellboy.github.io/py-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
 [Documentation](https://agent-hellboy.github.io/py-mcp/) | [Quick Start](https://agent-hellboy.github.io/py-mcp/getting-started/) | [Tasks](https://agent-hellboy.github.io/py-mcp/tasks/) | [Security](https://agent-hellboy.github.io/py-mcp/security/) | [Middleware](https://agent-hellboy.github.io/py-mcp/middleware/)
 

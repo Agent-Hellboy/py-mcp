@@ -61,7 +61,7 @@ def welcomeMemo() -> str:
 
 
 if __name__ == "__main__":
-    import uvicorn
+    from pymcp import run_http_server
 
     app = create_app(
         middleware_config=middleware_config,
@@ -74,4 +74,4 @@ if __name__ == "__main__":
             ),
         ),
     )
-    uvicorn.run(app, host="0.0.0.0", port=8088)
+    run_http_server(app, host="0.0.0.0", port=8088)

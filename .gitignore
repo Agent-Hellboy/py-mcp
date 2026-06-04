@@ -11,3 +11,4 @@ explore
 .cursor/mcp.json
 .tox/
 py_sse_mcp.egg-info/
+plan.md

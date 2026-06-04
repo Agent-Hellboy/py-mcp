@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pymcp import create_app
+from pymcp.capabilities.registry import ClientCapabilities
 from pymcp.session import get_session_manager, request_elicitation
 
 
@@ -14,6 +15,7 @@ pytestmark = pytest.mark.anyio
 async def test_request_elicitation_queues_request_and_resolves_response():
     app = create_app(middleware_config=None)
     session = get_session_manager(app).create_session()
+    session.client_capabilities = ClientCapabilities({"elicitation": {"form": {}}})
 
     task = asyncio.create_task(
         request_elicitation(
@@ -28,7 +30,7 @@ async def test_request_elicitation_queues_request_and_resolves_response():
     assert outbound["method"] == "elicitation/create"
     assert outbound["params"]["mode"] == "form"
 
-    get_session_manager(app).resolve_elicitation_response(
+    get_session_manager(app).resolve_pending_response(
         session.session_id,
         rpc_id,
         {"jsonrpc": "2.0", "id": rpc_id, "result": {"action": "accept"}},
