@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 
+from ..util.async_timeout import await_with_timeout
 from .queueing import get_session_outbound_queue
 from .store import get_session_manager
 
@@ -63,8 +64,7 @@ async def request_roots_list(
         if effective_timeout is None:
             response: JSONObject = await fut
         else:
-            async with asyncio.timeout(effective_timeout):
-                response = await fut
+            response = await await_with_timeout(fut, effective_timeout)
     except asyncio.TimeoutError:
         session.pending_requests.pop(rpc_id, None)
         raise
