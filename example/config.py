@@ -1,4 +1,5 @@
 from pymcp.middleware import MiddlewareConfig
+from pymcp.security import OAuthProtectedResourceConfig
 
 middleware_config = MiddlewareConfig(
     cors={
@@ -12,6 +13,11 @@ middleware_config = MiddlewareConfig(
         "format": "%(asctime)s %(levelname)s %(message)s",
     },
     compression={"enabled": True},
+    oauth=OAuthProtectedResourceConfig(
+        authorization_servers=["https://auth.example.com"],
+        scopes_supported=["mcp:access"],
+        resource_name="Example MCP",
+    ),
     custom=[
         # Add custom middleware classes here if needed
     ],

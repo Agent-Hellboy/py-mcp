@@ -108,6 +108,22 @@ def test_oauth_protected_resource_metadata_route():
     }
 
 
+def test_create_app_kwargs_forward_oauth_config_to_middleware():
+    app = create_app(
+        middleware_config=None,
+        oauth=OAuthProtectedResourceConfig(
+            authorization_servers=["https://auth.example.com"],
+            scopes_supported=["files:read"],
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.get("/.well-known/oauth-protected-resource")
+
+    assert response.status_code == 200
+    assert response.json()["authorization_servers"] == ["https://auth.example.com"]
+
+
 def test_oauth_authentication_required_response_includes_discovery_challenge():
     app = create_app(
         middleware_config=MiddlewareConfig(

@@ -4,7 +4,8 @@ from pymcp.protocol.payload import get_payload_factory
 from pymcp.protocol.validate import validate_jsonrpc_request
 from pymcp.registries.registry import PromptRegistry, ResourceRegistry, ToolRegistry
 from pymcp.runtime.limits import RuntimeLimits
-from pymcp.security.authz import AuthzRequest
+from pymcp.security.authn import Principal
+from pymcp.security.authz import AuthorizationError, AuthzRequest
 from pymcp.security.configured import RuleBasedAuthorizer
 
 
@@ -91,3 +92,60 @@ def test_rule_based_authorizer_conditionless_rule_matches_anonymous():
     )
 
     authorizer.authorize(None, AuthzRequest(rpc_method="tools/list"))
+
+
+def test_rule_based_authorizer_required_scopes_stop_at_first_matching_deny():
+    authorizer = RuleBasedAuthorizer(
+        {
+            "default_effect": "deny",
+            "rules": [
+                {
+                    "rpc_method": "tools/call",
+                    "effect": "allow",
+                    "allow_scopes": ["tools:read"],
+                },
+                {
+                    "rpc_method": "tools/call",
+                    "effect": "deny",
+                    "message": "tool calls disabled",
+                },
+                {
+                    "rpc_method": "tools/call",
+                    "effect": "allow",
+                    "allow_scopes": ["tools:write"],
+                },
+            ],
+        }
+    )
+
+    scopes = authorizer.required_scopes_for(
+        Principal(subject="alice"),
+        AuthzRequest(rpc_method="tools/call"),
+    )
+
+    assert scopes == ()
+
+
+def test_rule_based_authorizer_uses_allow_rule_message_for_missing_scope():
+    authorizer = RuleBasedAuthorizer(
+        {
+            "default_effect": "deny",
+            "rules": [
+                {
+                    "rpc_method": "tools/call",
+                    "effect": "allow",
+                    "allow_scopes": ["tools:write"],
+                    "message": "Tool write scope required",
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(AuthorizationError) as exc_info:
+        authorizer.authorize(
+            Principal(subject="alice", scopes={"tools:read"}),
+            AuthzRequest(rpc_method="tools/call"),
+        )
+
+    assert str(exc_info.value) == "Tool write scope required"
+    assert exc_info.value.required_scopes == ("tools:write",)

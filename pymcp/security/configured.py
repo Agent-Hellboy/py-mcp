@@ -244,9 +244,11 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
         required: list[str] = []
 
         for rule in self._rules:
-            if rule.effect != "allow" or not rule.allow_scopes:
-                continue
             if not self._rule_matches_request(rule, request):
+                continue
+            if rule.effect == "deny":
+                return ()
+            if rule.effect != "allow" or not rule.allow_scopes:
                 continue
             for scope in rule.allow_scopes:
                 if scope not in required:
@@ -262,9 +264,11 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
     def _missing_scope_message(self, principal: Principal | None, request: AuthzRequest) -> str | None:
         current_scopes = self._effective_scopes(principal)
         for rule in self._rules:
-            if rule.effect != "allow" or not rule.allow_scopes or not rule.message:
-                continue
             if not self._rule_matches_request(rule, request):
+                continue
+            if rule.effect == "deny":
+                return None
+            if rule.effect != "allow" or not rule.allow_scopes or not rule.message:
                 continue
             if not any(
                 fnmatch.fnmatch(current_scope, required_scope)
