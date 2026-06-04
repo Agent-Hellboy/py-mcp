@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from asyncio import TimerHandle, get_running_loop
 from uuid import uuid4
 
 from fastapi import APIRouter, Request
@@ -17,6 +18,7 @@ from ..runtime.payloads import (
     SESSION_NOT_FOUND,
     error_response,
 )
+from ..observability.logging import get_logger
 from ..session import get_session_store
 from ..settings import SUPPORTED_PROTOCOL_VERSIONS
 from .http_common import accept_contains, get_mcp_session_id, try_parse_json_body
@@ -24,6 +26,8 @@ from .shutdown import ensure_shutdown_event, wait_queue_message
 
 
 router = APIRouter()
+logger = get_logger(__name__)
+_CONNECTION_COMPLETE_IDLE_SECONDS = 1.0
 
 _DEFAULT_ALLOWED_ORIGINS = frozenset(
     {
@@ -80,6 +84,44 @@ def _post_headers(request: Request, session_id: str) -> dict[str, str]:
     return {"MCP-Session-Id": session_id}
 
 
+def _log_jsonrpc_start(data: dict) -> None:
+    method = data.get("method")
+    method_name = method if isinstance(method, str) else "<unknown>"
+    if method_name == "initialize":
+        logger.info("[HTTP][MCP] server state client connection started")
+        logger.info("[HTTP][MCP] server state handshake started")
+    logger.info("[HTTP][MCP] client -> server request received method=%s", method_name)
+    logger.debug("[HTTP][MCP] client -> server request body method=%s body=%s", method_name, data)
+
+
+def _log_jsonrpc_complete(method_name: str, status: int, payload: dict | None) -> None:
+    if method_name == "notifications/initialized" and status == 202:
+        logger.info("[HTTP][MCP] server state handshake complete")
+    else:
+        logger.info("[HTTP][MCP] server -> client response sent method=%s status=%s", method_name, status)
+        logger.debug("[HTTP][MCP] server -> client response body method=%s body=%s", method_name, payload)
+
+
+def _schedule_connection_complete(request: Request, session_id: str) -> None:
+    handles = getattr(request.app.state, "mcp_connection_complete_handles", None)
+    if handles is None:
+        handles = {}
+        request.app.state.mcp_connection_complete_handles = handles
+
+    existing = handles.pop(session_id, None)
+    if isinstance(existing, TimerHandle):
+        existing.cancel()
+
+    def _log_complete() -> None:
+        handles.pop(session_id, None)
+        logger.info("[HTTP][MCP] server state client connection complete")
+
+    handles[session_id] = get_running_loop().call_later(
+        _CONNECTION_COMPLETE_IDLE_SECONDS,
+        _log_complete,
+    )
+
+
 def _apply_session_principal(session, request_principal) -> Response | None:
     if request_principal is None:
         return None
@@ -100,6 +142,18 @@ def _format_sse(data: str, *, event: str | None = None, event_id: str | None = N
     for chunk in data.splitlines() or [""]:
         lines.append(f"data: {chunk}")
     return "\n".join(lines) + "\n\n"
+
+
+@router.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource_probe() -> Response:
+    logger.info("[HTTP][MCP] client -> server probe oauth-protected-resource metadata")
+    return Response(status_code=404)
+
+
+@router.get("/.well-known/oauth-protected-resource/mcp")
+async def oauth_protected_resource_mcp_probe() -> Response:
+    logger.info("[HTTP][MCP] client -> server probe oauth-protected-resource metadata for /mcp")
+    return Response(status_code=404)
 
 
 async def _stream_session_events(
@@ -207,11 +261,14 @@ async def mcp_post(request: Request) -> Response:
             if principal_error is not None:
                 return principal_error
 
+    _log_jsonrpc_start(data)
+
     if method_name is None:
         rpc_id = data.get("id")
         if isinstance(rpc_id, str):
             session_manager.resolve_pending_response(session_id, rpc_id, data)
         headers = _post_headers(request, session_id)
+        _schedule_connection_complete(request, session_id)
         return Response(status_code=202, headers=headers)
 
     result = await process_jsonrpc_message(
@@ -220,6 +277,8 @@ async def mcp_post(request: Request) -> Response:
         app=request.app,
         direct_response=True,
     )
+    _log_jsonrpc_complete(method_name, result.status, result.payload)
+    _schedule_connection_complete(request, session_id)
     headers = _post_headers(request, session_id)
     if result.payload is None:
         return Response(status_code=result.status, headers=headers)

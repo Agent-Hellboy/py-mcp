@@ -74,7 +74,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if (
             request.method == "OPTIONS"
             or request.url.path in self._exempt_paths
-            or request.url.path.startswith("/.well-known/oauth-protected-resource")
+            or request.url.path == "/.well-known/oauth-protected-resource"
+            or request.url.path.startswith("/.well-known/oauth-protected-resource/")
         ):
             logger.debug("[HTTP][AUTH][SKIP] method=%s path=%s", request.method, request.url.path)
             return await call_next(request)

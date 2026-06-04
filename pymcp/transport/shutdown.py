@@ -40,6 +40,7 @@ async def wait_queue_message(
         shutdown_task = asyncio.create_task(shutdown.wait())
         tasks.add(shutdown_task)
 
+    pending = tasks
     try:
         done, pending = await asyncio.wait(
             tasks,
