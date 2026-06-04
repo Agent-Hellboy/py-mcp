@@ -232,6 +232,35 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
 
         return None
 
+    def required_scopes_for(self, principal: Principal | None, request: AuthzRequest) -> tuple[str, ...]:
+        """Return scopes from matching allow rules that the principal does not have."""
+
+        rpc_method = request.rpc_method or ""
+        tool_name = request.tool_name
+        current_scopes = self._effective_scopes(principal)
+        required: list[str] = []
+
+        for rule in self._rules:
+            if rule.effect != "allow" or not rule.allow_scopes:
+                continue
+            if not _matches_any(rule.methods, rpc_method):
+                continue
+            if rule.tool is not None:
+                if tool_name is None:
+                    continue
+                if not fnmatch.fnmatch(str(tool_name), rule.tool):
+                    continue
+            for scope in rule.allow_scopes:
+                if scope not in required:
+                    required.append(scope)
+
+        missing = [
+            scope
+            for scope in required
+            if not any(fnmatch.fnmatch(current_scope, scope) for current_scope in current_scopes)
+        ]
+        return tuple(missing)
+
     def _is_allowed(self, principal: Principal | None, request: AuthzRequest) -> bool:
         rule = self._evaluate(principal, request)
         if rule is None:
@@ -244,7 +273,11 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
         if self._is_allowed(principal, request):
             return
         rule = self._evaluate(principal, request)
-        raise AuthorizationError(rule.message if rule and rule.message else "Forbidden")
+        required_scopes = self.required_scopes_for(principal, request)
+        raise AuthorizationError(
+            rule.message if rule and rule.message else "Forbidden",
+            required_scopes=required_scopes,
+        )
 
     def filter_capabilities(self, principal: Principal | None, capabilities: JSONObject) -> JSONObject:
         if not self._hide_caps:

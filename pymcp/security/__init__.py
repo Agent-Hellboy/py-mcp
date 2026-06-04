@@ -18,6 +18,7 @@ from .authz import (
     infer_capability,
 )
 from .configured import RuleBasedAuthorizer, TokenMapAuthenticator, load_json_config
+from .oauth import OAuthProtectedResourceConfig
 
 __all__ = [
     "AllowAllAuthorizer",
@@ -29,6 +30,7 @@ __all__ = [
     "AuthzRequest",
     "DenyAllAuthorizer",
     "MethodAllowListAuthorizer",
+    "OAuthProtectedResourceConfig",
     "Principal",
     "RuleBasedAuthorizer",
     "TokenMapAuthenticator",
