@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from pymcp import create_app
 from pymcp.security import TokenMapAuthenticator
 from pymcp.session import get_session_store
+from pymcp.transport.shutdown import ensure_shutdown_event
 from pymcp.transport.streamable_http import _stream_session_events
 
 
@@ -69,6 +70,31 @@ async def test_stream_generator_emits_ping_when_idle():
 
     request.disconnect()
     await stream.aclose()
+
+
+async def test_stream_generator_exits_when_server_shutdown_signaled():
+    app = create_app(middleware_config=None)
+    manager = get_session_store(app)
+    session = manager.create_session()
+    request = _FakeRequest(app)
+    shutdown = ensure_shutdown_event(app)
+
+    await manager.note_stream_open(session.session_id, stream_id="stream-1")
+    stream = _stream_session_events(
+        request,
+        session.session_id,
+        session,
+        "stream-1",
+        heartbeat_interval=30.0,
+    )
+    assert await anext(stream) == ": connected\n\n"
+
+    shutdown.set()
+    with pytest.raises(StopAsyncIteration):
+        await anext(stream)
+
+    await stream.aclose()
+    assert session.stream_attached is False
 
 
 def test_streamable_http_preserves_session_principal_and_rejects_mismatch():

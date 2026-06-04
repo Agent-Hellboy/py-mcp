@@ -8,7 +8,7 @@ from typing import cast
 from pydantic import ValidationError
 
 from ...observability.logging import get_logger
-from ...capabilities.registry import get_server_capabilities
+from ...capabilities.registry import ClientCapabilities
 from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject
 from ...protocol.payload import negotiate_protocol_version
@@ -61,7 +61,7 @@ async def handle_initialize(ctx: DispatchContext) -> DispatchResult:
                 principal.subject if principal is not None else None,
             )
 
-    ctx.session.client_capabilities = dict(client_capabilities or {})
+    ctx.session.client_capabilities = ClientCapabilities(client_capabilities)
     ctx.session.client_info = dict(client_info)
     ctx.session.capabilities = capabilities
     ctx.session.protocol_version = accepted_version
@@ -115,21 +115,11 @@ async def handle_elicitation_create(ctx: DispatchContext) -> DispatchResult:
         return make_result(200, json_response=True, payload=payload)
 
     mode = elicitation_params.mode or "form"
-    caps_value = get_server_capabilities(ctx.app).get_capabilities().get("elicitation")
-    supported_modes = caps_value if isinstance(caps_value, dict) else {}
-    if mode not in supported_modes:
+    if not ctx.session.client_capabilities.supports_elicitation(mode):
         payload = ctx.payloads().error(
             ctx.rpc_id,
             MCPErrorCode.METHOD_NOT_FOUND,
-            f"Elicitation mode '{mode}' not supported",
-        )
-        await ctx.maybe_enqueue(payload)
-        return make_result(200, json_response=True, payload=payload)
-    if mode != "form":
-        payload = ctx.payloads().error(
-            ctx.rpc_id,
-            MCPErrorCode.METHOD_NOT_FOUND,
-            f"Elicitation mode '{mode}' not supported server-side",
+            f"Client does not support elicitation mode '{mode}'",
         )
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)

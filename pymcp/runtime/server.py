@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI
@@ -20,8 +21,17 @@ from ..session.notifications import (
     attach_resource_updated_notifications,
     attach_tool_list_changed_notifications,
 )
-from ..session.store import SessionManager
+from ..session.store import SessionManager, get_session_manager
 from ..settings import ServerSettings
+from ..transport.shutdown import ensure_shutdown_event
+
+
+@asynccontextmanager
+async def _mcp_lifespan(app: FastAPI):
+    ensure_shutdown_event(app)
+    yield
+    ensure_shutdown_event(app).set()
+    await get_session_manager(app).shutdown()
 
 
 def create_app(
@@ -29,14 +39,17 @@ def create_app(
     server_settings: Optional[ServerSettings] = None,
     **kwargs,
 ):
-    app = FastAPI(title="PyMCP Kit", summary="Composable MCP toolkit on FastAPI")
+    app = FastAPI(
+        title="PyMCP Kit",
+        summary="Composable MCP toolkit on FastAPI",
+        lifespan=_mcp_lifespan,
+    )
     server_kwargs = {}
     if kwargs.get("server_name") is not None:
         server_kwargs["name"] = kwargs["server_name"]
     if kwargs.get("server_version") is not None:
         server_kwargs["version"] = kwargs["server_version"]
     app.state.server_settings = server_settings or ServerSettings(**server_kwargs)
-    app.state.roots = list(kwargs.get("roots", []))
     app.state.registry_manager = RegistryManager()
     app.state.registry_manager.copy_from_global_registries(
         tool_registry,

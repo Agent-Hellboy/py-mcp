@@ -49,17 +49,22 @@ class DispatchContext:
     queue: asyncio.Queue[str] | None = None
 
     def supports(self, feature: str) -> bool:
-        if feature == "roots":
-            return True
-
+        """Check whether the *server* advertises *feature*."""
         capabilities = self._capabilities()
-
         if feature == "tasks":
             return bool(capabilities.get("tasks")) if isinstance(capabilities, dict) else False
-
         return feature in capabilities
 
+    def client_supports(self, feature: str) -> bool:
+        """Check whether the *client* declared support for *feature*."""
+        return self.session.client_capabilities.supports(feature)
+
     def supports_task_request(self, namespace: str, method: str) -> bool:
+        """Check whether the *server* advertises task-augmented request support.
+
+        Used by the tool handler to decide if task-augmented tool calls
+        are enabled on the server side.
+        """
         capabilities = self._capabilities()
         tasks_caps = capabilities.get("tasks")
         if not isinstance(tasks_caps, dict):

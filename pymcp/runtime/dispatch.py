@@ -20,6 +20,7 @@ from .handlers.registry import get_registered_handlers
 from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject, make_result
 
 # Side-effect imports register built-in handlers.
+from .handlers import completions as _completions  # noqa: F401
 from .handlers import lifecycle as _lifecycle  # noqa: F401
 from .handlers import prompts as _prompts  # noqa: F401
 from .handlers import resources as _resources  # noqa: F401
@@ -121,6 +122,7 @@ class CapabilityGateMiddleware:
         ("prompts/", "prompts"),
         ("resources/", "resources"),
         ("tasks/", "tasks"),
+        ("completion/", "completions"),
     )
 
     async def __call__(self, ctx: DispatchContext, call_next: DispatchNext) -> DispatchResponse:
