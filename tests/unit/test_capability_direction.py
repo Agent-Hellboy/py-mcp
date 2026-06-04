@@ -1,7 +1,5 @@
 """Verify build_capabilities produces only server-side capabilities."""
 
-import pytest
-
 from pymcp.capabilities.registry import build_capabilities
 from pymcp.registries.registry import PromptRegistry, ResourceRegistry, ToolRegistry
 from pymcp.settings import CapabilitySettings
