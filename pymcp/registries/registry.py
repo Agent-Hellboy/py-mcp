@@ -180,6 +180,7 @@ class ResourceTemplateDefinition:
     description: str
     mime_type: str
     function: SyncOrAsyncCallable
+    variables: dict[str, dict[str, Any]] | None = None
     _matcher: re.Pattern[str] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -463,6 +464,7 @@ class ResourceRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         mime_type: str = "text/plain",
+        variables: dict[str, dict[str, Any]] | None = None,
     ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
         if func is None:
             return lambda callback: self.register_template(
@@ -471,6 +473,7 @@ class ResourceRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 mime_type=mime_type,
+                variables=variables,
             )
 
         manager = get_current_registry_manager()
@@ -481,6 +484,7 @@ class ResourceRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 mime_type=mime_type,
+                variables=variables,
             )
 
         template_name = name or func.__name__
@@ -491,6 +495,7 @@ class ResourceRegistry(_RegistryBase):
             description=template_description,
             mime_type=mime_type,
             function=func,
+            variables=variables,
         )
         self._templates[uri_template] = definition
         self._notify_listeners()

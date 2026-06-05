@@ -32,14 +32,13 @@ def rank_completions(candidates: list[str], prefix: str) -> list[str]:
 
     normalized_prefix = prefix.casefold()
     if not normalized_prefix:
-        return sorted(candidates, key=str.casefold)
+        return list(candidates)
 
     prefix_matches = [value for value in candidates if value.casefold().startswith(normalized_prefix)]
     if prefix_matches:
-        return sorted(prefix_matches, key=lambda value: (len(value), value.casefold()))
+        return prefix_matches
 
-    substring_matches = [value for value in candidates if normalized_prefix in value.casefold()]
-    return sorted(substring_matches, key=lambda value: (len(value), value.casefold()))
+    return [value for value in candidates if normalized_prefix in value.casefold()]
 
 
 def paginate_completions(
