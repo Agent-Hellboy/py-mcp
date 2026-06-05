@@ -5,6 +5,7 @@ from __future__ import annotations
 from ...capabilities.registry import get_server_capabilities
 from ...protocol.errors import MCPErrorCode
 from ..types import DispatchContext, DispatchResult, make_result
+from .listing import build_paginated_list_result
 from .registry import rpc_method
 
 
@@ -15,22 +16,29 @@ async def handle_resources_list(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 
-    payload = ctx.payloads().build_resources_list(ctx.rpc_id)
-    authorizer = getattr(getattr(ctx.app, "state", None), "authorizer", None)
-    principal = getattr(ctx.session, "principal", None)
-    if authorizer and isinstance(payload, dict):
-        result_value = payload.get("result")
-        if isinstance(result_value, dict):
-            resources_value = result_value.get("resources")
-            if isinstance(resources_value, list):
-                try:
-                    resources = [entry for entry in resources_value if isinstance(entry, dict)]
-                    result_value["resources"] = authorizer.filter_resources(principal, resources)
-                except Exception:
-                    pass
+    resources = ctx.registry_manager.get_resource_registry().list_payload()
+    return await build_paginated_list_result(
+        ctx,
+        items=resources,
+        result_key="resources",
+        filter_method="filter_resources",
+    )
 
-    await ctx.maybe_enqueue(payload)
-    return make_result(200, json_response=True, payload=payload)
+
+@rpc_method("resources/templates/list")
+async def handle_resources_templates_list(ctx: DispatchContext) -> DispatchResult:
+    if not ctx.supports("resources"):
+        payload = ctx.payloads().error(ctx.rpc_id, MCPErrorCode.METHOD_NOT_FOUND, "resources not supported")
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+
+    templates = ctx.registry_manager.get_resource_registry().list_template_payload()
+    return await build_paginated_list_result(
+        ctx,
+        items=templates,
+        result_key="resourceTemplates",
+        filter_method="filter_resource_templates",
+    )
 
 
 @rpc_method("resources/read")
@@ -91,7 +99,7 @@ async def _handle_resource_subscription(ctx: DispatchContext, *, unsubscribe: bo
         return make_result(200, json_response=True, payload=payload)
 
     resource_registry = ctx.registry_manager.get_resource_registry()
-    unknown = [uri for uri in uris if resource_registry.get(uri) is None]
+    unknown = [uri for uri in uris if not resource_registry.has_uri(uri)]
     if unknown:
         payload = ctx.payloads().error(
             ctx.rpc_id,
@@ -136,5 +144,6 @@ __all__ = [
     "handle_resources_list",
     "handle_resources_read",
     "handle_resources_subscribe",
+    "handle_resources_templates_list",
     "handle_resources_unsubscribe",
 ]

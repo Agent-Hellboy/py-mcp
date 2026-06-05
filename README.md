@@ -59,6 +59,15 @@ def release_plan() -> str:
     return "# Release Plan\n- freeze API\n- tag build\n"
 
 
+@resource_registry.register_template(
+    uri_template="note://{topic}",
+    name="topic_note",
+    description="Parameterized note resource keyed by topic.",
+)
+def topic_note(topic: str) -> str:
+    return f"Notes for topic: {topic}"
+
+
 app = create_app(
     server_settings=ServerSettings(
         name="demo-server",
@@ -79,7 +88,7 @@ Hosted documentation is built from `docs/` with MkDocs Material and published to
 
 - Streamable HTTP transport for networked MCP servers
 - Stdio transport for local-process MCP hosts
-- Tool, prompt, and resource registries
+- Tool, prompt, and resource registries, including parameterized resource templates
 - Roots, resource subscriptions, and app-scoped session lifecycle
 - Task-aware tool execution with progress, cancellation, and result polling
 - Optional authentication and authorization hooks
@@ -89,12 +98,61 @@ Hosted documentation is built from `docs/` with MkDocs Material and published to
 
 ## Supported MCP Methods
 
-- `initialize`, `ping`, `notifications/initialized`, and `notifications/cancelled`
-- `tools/list` and `tools/call`
-- `prompts/list` and `prompts/get`
-- `resources/list`, `resources/read`, `resources/subscribe`, and `resources/unsubscribe`
-- `roots/list`
-- `tasks/list`, `tasks/get`, `tasks/cancel`, and `tasks/result`
+Server-side JSON-RPC methods and notifications implemented by `pymcp-kit`:
+
+### Lifecycle
+
+- `initialize`
+- `ping`
+- `notifications/initialized`
+- `notifications/cancelled`
+
+### Tools
+
+- `tools/list` (cursor pagination)
+- `tools/call`
+
+### Prompts
+
+- `prompts/list` (cursor pagination)
+- `prompts/get`
+
+### Resources
+
+- `resources/list` (cursor pagination)
+- `resources/templates/list` (cursor pagination)
+- `resources/read`
+- `resources/subscribe`
+- `resources/unsubscribe`
+- `notifications/resources/updated` (server → client)
+- `notifications/resources/list_changed` (server → client, when enabled)
+
+### Completions
+
+- `completion/complete` (when `completions_enabled` is set)
+
+### Tasks
+
+- `tasks/list` (cursor pagination)
+- `tasks/get`
+- `tasks/cancel`
+- `tasks/result`
+- `notifications/tasks/status` (server → client)
+- `notifications/progress` (server → client)
+
+### Client capabilities (server-initiated helpers)
+
+These are not inbound server handlers; the toolkit sends requests or notifications to the client when the client advertises the capability:
+
+- `roots/list` via `request_roots_list()`
+- `notifications/roots/list_changed` (client → server notification)
+- `elicitation/create` via `request_elicitation()`
+- `sampling/createMessage` via `request_sampling()`
+- `notifications/message` via `send_log_message()`
+
+List operations support optional `cursor` / `nextCursor` pagination. Page size is controlled by `CapabilitySettings.list_page_size` (default `50`).
+
+See [Runtime Surface](https://agent-hellboy.github.io/py-mcp/runtime-surface/) for protocol versions, HTTP endpoints, and capability settings.
 
 ## Example Server
 

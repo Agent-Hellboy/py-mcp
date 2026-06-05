@@ -145,7 +145,7 @@ def build_capabilities(
             list_changed=settings.resources_list_changed,
             subscribe=settings.resources_subscribe,
             advertise_empty=settings.advertise_empty_resources,
-            available=bool(resources.get_resources()),
+            available=bool(resources.get_resources()) or bool(resources.get_templates()),
         ),
         LoggingCapability(enabled=settings.logging_enabled),
         CompletionsCapability(enabled=settings.completions_enabled),

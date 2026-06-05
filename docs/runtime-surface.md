@@ -40,6 +40,7 @@
 ### Resources
 
 - `resources/list`
+- `resources/templates/list`
 - `resources/read`
 - `resources/subscribe`
 - `resources/unsubscribe`

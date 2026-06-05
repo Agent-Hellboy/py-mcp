@@ -330,6 +330,14 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
         _ = principal
         return list(resources)
 
+    def filter_resource_templates(
+        self,
+        principal: Principal | None,
+        templates: Sequence[JSONObject],
+    ) -> list[JSONObject]:
+        _ = principal
+        return list(templates)
+
 
 __all__ = [
     "RuleBasedAuthorizer",

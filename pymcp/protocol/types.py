@@ -150,6 +150,7 @@ class CallToolRequestParams(BaseModel):
 
 class ListToolsResult(BaseModel):
     tools: list[Tool] = Field(..., description="List of tools")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
 
 
 class PromptArgument(BaseModel):
@@ -171,6 +172,7 @@ class GetPromptRequestParams(BaseModel):
 
 class ListPromptsResult(BaseModel):
     prompts: list[Prompt] = Field(..., description="List of prompts")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
 
 
 class PromptMessage(BaseModel):
@@ -192,6 +194,19 @@ class Resource(BaseModel):
 
 class ListResourcesResult(BaseModel):
     resources: list[Resource] = Field(..., description="List of resources")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
+
+
+class ResourceTemplate(BaseModel):
+    uriTemplate: str = Field(..., description="URI template with parameter placeholders")
+    name: str = Field(..., description="Template name")
+    description: str | None = Field(default=None, description="Template description")
+    mimeType: str | None = Field(default=None, description="MIME type")
+
+
+class ListResourceTemplatesResult(BaseModel):
+    resourceTemplates: list[ResourceTemplate] = Field(..., description="List of resource templates")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
 
 
 class Root(BaseModel):
@@ -428,6 +443,7 @@ __all__ = [
     "JSONRPCRequest",
     "JSONRPCResponse",
     "ListPromptsResult",
+    "ListResourceTemplatesResult",
     "ListResourcesResult",
     "ListRootsResult",
     "ListToolsResult",
@@ -444,6 +460,7 @@ __all__ = [
     "ReadResourceResult",
     "Resource",
     "ResourceContents",
+    "ResourceTemplate",
     "ResourcesListChangedNotification",
     "Root",
     "SamplingContentBlock",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject
 from ..types import DispatchContext, DispatchResult, make_result
+from .listing import build_paginated_list_result
 from .registry import rpc_method
 
 
@@ -15,23 +16,13 @@ async def handle_prompts_list(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 
-    payload = ctx.payloads().build_prompts_list(ctx.rpc_id)
-    authorizer = getattr(getattr(ctx.app, "state", None), "authorizer", None)
-    principal = getattr(ctx.session, "principal", None)
-    if authorizer and isinstance(payload, dict):
-        result_value = payload.get("result")
-        if isinstance(result_value, dict):
-            prompts_value = result_value.get("prompts")
-            if isinstance(prompts_value, list):
-                try:
-                    prompts = [entry for entry in prompts_value if isinstance(entry, dict)]
-                    filtered = authorizer.filter_prompts(principal, prompts)
-                    result_value["prompts"] = [cast_entry for cast_entry in filtered]
-                except Exception:
-                    pass
-
-    await ctx.maybe_enqueue(payload)
-    return make_result(200, json_response=True, payload=payload)
+    prompts = ctx.registry_manager.get_prompt_registry().list_payload()
+    return await build_paginated_list_result(
+        ctx,
+        items=prompts,
+        result_key="prompts",
+        filter_method="filter_prompts",
+    )
 
 
 @rpc_method("prompts/get")

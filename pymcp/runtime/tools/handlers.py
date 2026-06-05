@@ -12,6 +12,7 @@ from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject
 from ...tasks.cancellation import CancellationToken, CancelledError
 from ..context import AppContext, RequestContext, SessionContext
+from ..handlers.listing import build_paginated_list_result
 from ..handlers.registry import rpc_method
 from ..payloads import normalize_tool_result
 from ..types import DispatchContext, DispatchResult, make_result
@@ -83,26 +84,20 @@ async def handle_tools_list(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 
-    payload = ctx.payloads().build_tools_list(ctx.rpc_id)
+    tools = [entry for entry in ctx.registry_manager.get_tool_registry().list_payload() if isinstance(entry, dict)]
     authorizer = getattr(getattr(ctx.app, "state", None), "authorizer", None)
     principal = getattr(ctx.session, "principal", None)
-    if authorizer and isinstance(payload, dict):
-        result_value = payload.get("result")
-        if isinstance(result_value, dict):
-            tools_value = result_value.get("tools")
-            if isinstance(tools_value, list):
-                try:
-                    tools = [entry for entry in tools_value if isinstance(entry, dict)]
-                    result_value["tools"] = authorizer.filter_tools(principal, tools)
-                except Exception:
-                    logger.exception(
-                        "Failed to filter tools for principal %s",
-                        principal.subject if principal is not None else None,
-                    )
-                    result_value["tools"] = []
+    if authorizer:
+        try:
+            tools = authorizer.filter_tools(principal, tools)
+        except Exception:
+            logger.exception(
+                "Failed to filter tools for principal %s",
+                principal.subject if principal is not None else None,
+            )
+            tools = []
 
-    await ctx.maybe_enqueue(payload)
-    return make_result(200, json_response=True, payload=payload)
+    return await build_paginated_list_result(ctx, items=tools, result_key="tools")
 
 
 @rpc_method("tools/call")
