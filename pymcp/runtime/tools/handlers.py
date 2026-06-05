@@ -10,6 +10,7 @@ import anyio
 from ...observability.logging import get_logger
 from ...protocol.errors import MCPErrorCode
 from ...protocol.json_types import JSONObject
+from ...protocol.meta import split_result_meta
 from ...tasks.cancellation import CancellationToken, CancelledError
 from ..context import AppContext, RequestContext, SessionContext
 from ..handlers.registry import rpc_method
@@ -41,9 +42,9 @@ async def _handle_tools_call_task_augmented(
     if ttl_value is not None:
         ttl = int(ttl_value)
 
-    meta = ctx.data.get("_meta") or ctx.data.get("meta") or {}
+    meta = ctx.request_meta
     progress_token = None
-    if isinstance(meta, dict):
+    if meta:
         token = meta.get("progressToken")
         if isinstance(token, str) and token:
             progress_token = token
@@ -244,10 +245,9 @@ async def handle_tools_call(ctx: DispatchContext) -> DispatchResult:
             ctx.cancellation_manager.clear(token)
             return make_result(204, json_response=False, payload=None)
 
-        payload = ctx.payloads().success(
-            ctx.rpc_id,
-            normalize_tool_result(result),
-        )
+        normalized = normalize_tool_result(result)
+        result_body, result_meta = split_result_meta(normalized)
+        payload = ctx.success_payload(result_body, meta=result_meta)
 
         await ctx.maybe_enqueue(payload)
         ctx.cancellation_manager.clear(token)

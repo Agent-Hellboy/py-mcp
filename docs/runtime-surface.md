@@ -80,6 +80,12 @@ to the client via the `request_sampling()` helper.
 
 - `notifications/message` (server -> client log notification via `send_log_message()`)
 
+## Request and Result Metadata (`_meta`)
+
+JSON-RPC requests may carry `_meta` at the top level or under `params`. The runtime validates that each present `_meta` value is an object and merges top-level and params metadata for handlers that need progress tokens or related-task links.
+
+Tool handlers lift `_meta` from a tool result body onto the JSON-RPC response envelope so clients receive metadata alongside the MCP result object. Task result responses use the same envelope-level `_meta` pattern.
+
 ## Capability Settings
 
 `CapabilitySettings` controls which fragments appear in `initialize.result.capabilities` and which optional runtime behaviors are enabled.
