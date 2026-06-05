@@ -297,6 +297,10 @@ class LoggingMessageNotificationParams(BaseModel):
     data: JSONValue | None = Field(default=None, description="Arbitrary log data")
 
 
+class SetLoggingLevelRequestParams(BaseModel):
+    level: str = Field(..., description="Minimum log level for notifications/message")
+
+
 # ---------------------------------------------------------------------------
 # Completions types (client -> server)
 # ---------------------------------------------------------------------------
@@ -449,6 +453,7 @@ __all__ = [
     "SamplingContentBlock",
     "SamplingToolDefinition",
     "ServerInfo",
+    "SetLoggingLevelRequestParams",
     "Task",
     "TasksListResult",
     "TextContent",

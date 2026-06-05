@@ -78,6 +78,7 @@ to the client via the `request_sampling()` helper.
 
 ### Logging
 
+- `logging/setLevel`
 - `notifications/message` (server -> client log notification via `send_log_message()`)
 
 ## Capability Settings

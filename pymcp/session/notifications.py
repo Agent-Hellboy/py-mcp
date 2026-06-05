@@ -7,7 +7,13 @@ import json
 from fastapi import FastAPI
 
 from ..capabilities.registry import get_server_capabilities
+from ..protocol.logging_levels import normalize_log_level, should_send_log
 from ..registries.registry import get_registry_manager
+from .queueing import (
+    log_notification_skipped,
+    notification_method,
+    record_outbound_notification,
+)
 from .store import get_session_manager
 from .types import Session, SessionState
 
@@ -18,25 +24,40 @@ JSONObject = dict[str, object]
 async def send_notification(session: Session | None, notification: JSONObject) -> bool:
     """Queue a notification for a ready session with an attached stream."""
 
+    method = notification_method(notification)
     if session is None:
+        log_notification_skipped(method=method, reason="missing_session")
         return False
-    if session.lifecycle_state != SessionState.READY or not session.stream_attached:
+    if session.lifecycle_state != SessionState.READY:
+        log_notification_skipped(method=method, session_id=session.session_id, reason="session_not_ready")
+        return False
+    if not session.stream_attached:
+        log_notification_skipped(method=method, session_id=session.session_id, reason="stream_not_attached")
         return False
     await session.queue.put(json.dumps(notification))
+    record_outbound_notification(session, notification)
     return True
 
 
 def enqueue_notification(session: Session | None, notification: JSONObject) -> bool:
     """Queue a notification without blocking for a ready session with an attached stream."""
 
+    method = notification_method(notification)
     if session is None:
+        log_notification_skipped(method=method, reason="missing_session")
         return False
-    if session.lifecycle_state != SessionState.READY or not session.stream_attached:
+    if session.lifecycle_state != SessionState.READY:
+        log_notification_skipped(method=method, session_id=session.session_id, reason="session_not_ready")
+        return False
+    if not session.stream_attached:
+        log_notification_skipped(method=method, session_id=session.session_id, reason="stream_not_attached")
         return False
     try:
         session.queue.put_nowait(json.dumps(notification))
     except Exception:
+        log_notification_skipped(method=method, session_id=session.session_id, reason="queue_unavailable")
         return False
+    record_outbound_notification(session, notification)
     return True
 
 def attach_prompt_list_changed_notifications(app: FastAPI) -> None:
@@ -150,9 +171,25 @@ async def send_log_message(
 ) -> bool:
     """Send ``notifications/message`` (structured log) to the client.
 
-    Only sent when the server advertises the ``logging`` capability.
+    Only sent when the server advertises the ``logging`` capability and the
+    message meets the session minimum log level configured via ``logging/setLevel``.
     """
-    params: JSONObject = {"level": level}
+    logging_caps = get_server_capabilities(app).get_capabilities().get("logging")
+    if not isinstance(logging_caps, dict):
+        return False
+
+    manager = get_session_manager(app)
+    session = manager.get_session(session_id)
+    if session is None:
+        return False
+
+    normalized_level = normalize_log_level(level)
+    if normalized_level is None:
+        normalized_level = level.strip().lower()
+    if not should_send_log(normalized_level, session.log_level):
+        return False
+
+    params: JSONObject = {"level": normalized_level}
     if logger is not None:
         params["logger"] = logger
     if data is not None:
@@ -162,6 +199,4 @@ async def send_log_message(
         "method": "notifications/message",
         "params": params,
     }
-    manager = get_session_manager(app)
-    session = manager.get_session(session_id)
     return await send_notification(session, notification)
