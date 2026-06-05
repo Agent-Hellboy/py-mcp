@@ -21,18 +21,11 @@ class CompletionResolutionError(Exception):
 
 
 def _template_variable_completions(template: Any, variable: str) -> list[str]:
-    variables = getattr(template, "variable_completions", None)
+    variables = getattr(template, "variables", None)
     if isinstance(variables, dict):
-        values = variables.get(variable)
-        if isinstance(values, list):
-            return [str(value) for value in values]
-
-    metadata = getattr(template, "variables", None)
-    if isinstance(metadata, dict):
-        variable_meta = metadata.get(variable)
+        variable_meta = variables.get(variable)
         if isinstance(variable_meta, dict):
             return completion_candidates_from_argument(variable_meta)
-
     return []
 
 
