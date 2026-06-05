@@ -25,6 +25,40 @@ _R = TypeVar("_R", bound=object)
 _ToolFuncT = TypeVar("_ToolFuncT", bound=ToolFunction)
 
 _INTERNAL_TOOL_PARAMS = frozenset({"cancel_token", "task_context", "request_context"})
+ToolAnnotationsInput = dict[str, Any]
+ToolIconsInput = list[dict[str, Any]]
+
+
+def _normalize_tool_annotations(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(exclude_none=True)
+        if isinstance(dumped, dict) and dumped:
+            return dumped
+    if isinstance(value, dict):
+        normalized = {key: item for key, item in value.items() if item is not None}
+        return normalized or None
+    return None
+
+
+def _normalize_tool_icons(value: Any) -> list[dict[str, Any]] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or not value:
+        return None
+    icons: list[dict[str, Any]] = []
+    for item in value:
+        model_dump = getattr(item, "model_dump", None)
+        if callable(model_dump):
+            dumped = model_dump(exclude_none=True)
+            if isinstance(dumped, dict) and dumped.get("src"):
+                icons.append(dumped)
+            continue
+        if isinstance(item, dict) and item.get("src"):
+            icons.append({key: val for key, val in item.items() if val is not None})
+    return icons or None
 
 
 def _normalize_annotation(annotation: Any) -> Any:
@@ -116,6 +150,10 @@ class ToolDefinition:
     function: SyncOrAsyncCallable
     prompt: bool
     execution: ToolExecutionConfig | None = None
+    title: str | None = None
+    output_schema: JSONSchema | None = None
+    annotations: dict[str, Any] | None = None
+    icons: list[dict[str, Any]] | None = None
 
     def to_mcp_payload(self) -> dict[str, Any]:
         payload = {
@@ -123,6 +161,14 @@ class ToolDefinition:
             "description": self.description,
             "inputSchema": self.input_schema,
         }
+        if self.title:
+            payload["title"] = self.title
+        if self.output_schema:
+            payload["outputSchema"] = self.output_schema
+        if self.annotations:
+            payload["annotations"] = dict(self.annotations)
+        if self.icons:
+            payload["icons"] = [dict(icon) for icon in self.icons]
         if self.execution:
             payload["execution"] = dict(self.execution)
         return payload
@@ -201,6 +247,10 @@ class ToolRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         execution: ToolExecutionConfig | None = None,
+        title: str | None = None,
+        output_schema: JSONSchema | None = None,
+        annotations: Any = None,
+        icons: Any = None,
     ) -> _ToolFuncT:
         manager = get_current_registry_manager()
         if manager is not None and manager.tool_registry is not self:
@@ -209,6 +259,10 @@ class ToolRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 execution=execution,
+                title=title,
+                output_schema=output_schema,
+                annotations=annotations,
+                icons=icons,
             )
 
         tool_name = name or func.__name__
@@ -220,6 +274,10 @@ class ToolRegistry(_RegistryBase):
             function=func,
             prompt="prompt" in inspect.signature(func).parameters,
             execution=execution,
+            title=title,
+            output_schema=output_schema,
+            annotations=_normalize_tool_annotations(annotations),
+            icons=_normalize_tool_icons(icons),
         )
         self._tools[tool_name] = definition
         self._notify_listeners()
@@ -233,6 +291,10 @@ class ToolRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         execution: ToolExecutionConfig | None = None,
+        title: str | None = None,
+        output_schema: JSONSchema | None = None,
+        annotations: Any = None,
+        icons: Any = None,
     ) -> _ToolFuncT:
         ...
 
@@ -244,6 +306,10 @@ class ToolRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         execution: ToolExecutionConfig | None = None,
+        title: str | None = None,
+        output_schema: JSONSchema | None = None,
+        annotations: Any = None,
+        icons: Any = None,
     ) -> Callable[[_ToolFuncT], _ToolFuncT]:
         ...
 
@@ -254,6 +320,10 @@ class ToolRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         execution: ToolExecutionConfig | None = None,
+        title: str | None = None,
+        output_schema: JSONSchema | None = None,
+        annotations: Any = None,
+        icons: Any = None,
     ) -> Callable[[_ToolFuncT], _ToolFuncT] | _ToolFuncT:
         if func is None:
             return lambda callback: self._register_tool(
@@ -261,12 +331,20 @@ class ToolRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 execution=execution,
+                title=title,
+                output_schema=output_schema,
+                annotations=annotations,
+                icons=icons,
             )
         return self._register_tool(
             func,
             name=name,
             description=description,
             execution=execution,
+            title=title,
+            output_schema=output_schema,
+            annotations=annotations,
+            icons=icons,
         )
 
     def get(self, name: str) -> ToolDefinition | None:
@@ -290,6 +368,10 @@ class ToolRegistry(_RegistryBase):
                 "inputSchema": tool.input_schema,
                 "prompt": tool.prompt,
                 "execution": tool.execution,
+                "title": tool.title,
+                "outputSchema": tool.output_schema,
+                "annotations": tool.annotations,
+                "icons": tool.icons,
             }
         return payload
 
