@@ -32,6 +32,31 @@
 - `tools/list`
 - `tools/call`
 
+Tool registration supports optional declaration metadata:
+
+- `title`
+- `outputSchema`
+- `annotations` (`readOnlyHint`, `destructiveHint`, `openWorldHint`, `idempotentHint`)
+- `icons`
+
+Tool handlers may return `structuredContent` alongside `content` blocks in `tools/call` results.
+
+```python
+from pymcp import tool_registry
+
+@tool_registry.register(
+    title="Add numbers",
+    output_schema={"type": "object", "properties": {"sum": {"type": "number"}}},
+    annotations={"readOnlyHint": True, "destructiveHint": False},
+)
+def addNumbersTool(a: float, b: float) -> dict:
+    total = a + b
+    return {
+        "content": [{"type": "text", "text": str(total)}],
+        "structuredContent": {"sum": total},
+    }
+```
+
 ### Prompts
 
 - `prompts/list`
