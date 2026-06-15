@@ -3,7 +3,17 @@
 import pytest
 
 from pymcp import create_app
-from pymcp.protocol.types import Tool, ToolAnnotations, ToolIcon
+from pymcp.protocol.types import (
+    Annotations,
+    AudioContent,
+    EmbeddedResource,
+    ImageContent,
+    ResourceLink,
+    TextResourceContents,
+    Tool,
+    ToolAnnotations,
+    ToolIcon,
+)
 from pymcp.registry import tool_registry
 from pymcp.runtime.dispatch import process_jsonrpc_message
 
@@ -125,3 +135,36 @@ def test_tool_definition_omits_empty_optional_fields():
 
     payload = tool_registry.get("plainTool").to_mcp_payload()
     assert set(payload.keys()) == {"name", "description", "inputSchema"}
+
+
+def test_shared_protocol_models_support_extended_metadata():
+    icon = ToolIcon(src="https://example.com/icon.svg", theme="dark")
+    assert icon.model_dump(exclude_none=True)["theme"] == "dark"
+
+    image = ImageContent(
+        data="aGVsbG8=",
+        mimeType="image/png",
+        annotations=Annotations(priority=0.5),
+    )
+    audio = AudioContent(
+        data="aGVsbG8=",
+        mimeType="audio/wav",
+        annotations=Annotations(audience=["user"]),
+    )
+    resource_link = ResourceLink(
+        uri="test://link",
+        name="Link",
+        title="Linked Resource",
+        mimeType="text/plain",
+        size=12,
+    )
+    embedded = EmbeddedResource(
+        resource=TextResourceContents(uri="test://embedded", mimeType="text/plain", text="payload"),
+        annotations=Annotations(lastModified="2025-01-01T00:00:00Z"),
+    )
+
+    assert image.annotations is not None and image.annotations.priority == 0.5
+    assert audio.annotations is not None and audio.annotations.audience == ["user"]
+    assert resource_link.type == "resource_link"
+    assert resource_link.title == "Linked Resource"
+    assert embedded.annotations is not None and embedded.annotations.lastModified

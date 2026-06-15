@@ -34,9 +34,21 @@ def get_sessions(app):
 @router.get("/")
 async def root(request: Request):
     settings = _server_settings(request.app)
+    server = {
+        "name": settings.name,
+        "version": settings.version,
+    }
+    if settings.title is not None:
+        server["title"] = settings.title
+    if settings.description is not None:
+        server["description"] = settings.description
+    if settings.website_url is not None:
+        server["websiteUrl"] = settings.website_url
+    if settings.icons is not None:
+        server["icons"] = settings.icons
     return {
         "status": "ok",
-        "server": {"name": settings.name, "version": settings.version},
+        "server": server,
         "transport": {
             "streamableHttp": "/mcp",
             "stdio": True,

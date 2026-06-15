@@ -49,6 +49,14 @@ def create_app(
         server_kwargs["name"] = kwargs["server_name"]
     if kwargs.get("server_version") is not None:
         server_kwargs["version"] = kwargs["server_version"]
+    if kwargs.get("server_title") is not None:
+        server_kwargs["title"] = kwargs["server_title"]
+    if kwargs.get("server_description") is not None:
+        server_kwargs["description"] = kwargs["server_description"]
+    if kwargs.get("server_website_url") is not None:
+        server_kwargs["website_url"] = kwargs["server_website_url"]
+    if kwargs.get("server_icons") is not None:
+        server_kwargs["icons"] = kwargs["server_icons"]
     app.state.server_settings = server_settings or ServerSettings(**server_kwargs)
     app.state.registry_manager = RegistryManager()
     app.state.registry_manager.copy_from_global_registries(
