@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from ..observability.logging import get_logger
 from ..protocol.errors import MCPErrorCode, build_error_response
+from ..protocol.meta import MetaValidationError, validate_request_meta
 from ..protocol.validate import validate_jsonrpc_request
 from ..registries.registry import get_registry_manager
 from ..security.authz import AuthorizationError, build_authz_request
@@ -245,6 +246,15 @@ class Dispatcher:
         session_manager, session = self._get_session(session_id=session_id, data=data, app=app)
         rpc_id, method = self._validate_envelope(data)
         self._validate_request(data)
+        try:
+            validate_request_meta(data)
+        except MetaValidationError as exc:
+            raise DispatchError(
+                status=200,
+                code=exc.code,
+                message=str(exc),
+                rpc_id=rpc_id if "id" in data else None,
+            ) from exc
 
         server_settings = getattr(app.state, "server_settings", None)
         if server_settings is None:

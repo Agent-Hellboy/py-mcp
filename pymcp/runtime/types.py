@@ -9,6 +9,9 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from ..protocol.json_types import JSONValue
+from ..protocol.meta import attach_meta, extract_request_meta
+
 from ..capabilities import build_capabilities
 from ..protocol.payload import PayloadFactory, get_payload_factory
 from ..registries.registry import RegistryManager
@@ -92,6 +95,35 @@ class DispatchContext:
     def payloads(self, *, protocol_version: str | None = None) -> PayloadFactory:
         version = protocol_version or self.session.protocol_version
         return get_payload_factory(version, app=self.app)
+
+    @property
+    def request_meta(self) -> JSONObject:
+        return extract_request_meta(self.data)
+
+    def success_payload(
+        self,
+        result: JSONObject,
+        *,
+        meta: JSONObject | None = None,
+    ) -> JSONObject:
+        payload = self.payloads().success(self.rpc_id, result)
+        combined = dict(meta or {})
+        if combined:
+            return attach_meta(payload, combined)
+        return payload
+
+    def error_payload(
+        self,
+        code: int,
+        message: str,
+        *,
+        meta: JSONObject | None = None,
+        data: JSONValue | None = None,
+    ) -> JSONObject:
+        payload = self.payloads().error(self.rpc_id, code, message, data=data)
+        if meta:
+            return attach_meta(payload, meta)
+        return payload
 
     async def maybe_enqueue(
         self,
