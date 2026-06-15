@@ -62,7 +62,7 @@ def split_result_meta(result: JSONObject) -> tuple[JSONObject, JSONObject | None
     meta_value = payload.pop("_meta")
     if isinstance(meta_value, dict):
         return payload, meta_value
-    return result, None
+    return payload, None
 
 
 __all__ = [

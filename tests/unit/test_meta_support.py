@@ -54,7 +54,7 @@ def test_validate_request_meta_accepts_top_level_and_params():
 
 
 def test_validate_request_meta_rejects_invalid_params_meta():
-    with pytest.raises(MetaValidationError, match="params._meta"):
+    with pytest.raises(MetaValidationError, match=r"params\._meta"):
         validate_request_meta(
             {
                 "jsonrpc": "2.0",
@@ -90,6 +90,12 @@ def test_split_result_meta_lifts_meta_from_result_body():
     )
     assert "_meta" not in body
     assert meta == {"progressToken": "pt-2"}
+
+
+def test_split_result_meta_strips_invalid_meta():
+    body, meta = split_result_meta({"content": [], "_meta": "invalid"})
+    assert body == {"content": []}
+    assert meta is None
 
 
 def test_dispatch_rejects_invalid_request_meta():
