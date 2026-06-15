@@ -9,7 +9,13 @@ from typing import Any
 from uuid import uuid4
 
 from .lifecycle import SessionLifecycle
-from .queueing import get_session_outbound_queue, safe_queue_put
+from .queueing import (
+    get_session_outbound_queue,
+    log_notification_skipped,
+    notification_method,
+    record_outbound_notification,
+    safe_queue_put,
+)
 from .types import Session, SessionState
 
 
@@ -251,21 +257,66 @@ class SessionManager:
     def broadcast_resource_update(self, uri: str, notification: dict[str, Any]) -> None:
         """Broadcast a resource update to sessions subscribed to the URI."""
 
+        method = notification_method(notification)
         message = json.dumps(notification)
+        delivered = 0
         for session in self._sessions.values():
-            if session.lifecycle_state != SessionState.READY or not session.stream_attached:
+            if session.lifecycle_state != SessionState.READY:
+                log_notification_skipped(
+                    method=method,
+                    session_id=session.session_id,
+                    reason="session_not_ready",
+                )
                 continue
-            if uri in session.resource_subscriptions:
-                safe_queue_put(get_session_outbound_queue(session), message)
+            if not session.stream_attached:
+                log_notification_skipped(
+                    method=method,
+                    session_id=session.session_id,
+                    reason="stream_not_attached",
+                )
+                continue
+            if uri not in session.resource_subscriptions:
+                log_notification_skipped(
+                    method=method,
+                    session_id=session.session_id,
+                    reason=f"not_subscribed_to_{uri}",
+                )
+                continue
+            if safe_queue_put(get_session_outbound_queue(session), message):
+                record_outbound_notification(session, notification)
+                delivered += 1
+        if delivered == 0:
+            log_notification_skipped(
+                method=method,
+                reason=f"no_subscribed_sessions_for_{uri}",
+            )
 
     def broadcast_notification(self, notification: dict[str, Any]) -> None:
         """Broadcast a notification to all ready sessions with an attached stream."""
 
+        method = notification_method(notification)
         message = json.dumps(notification)
+        delivered = 0
         for session in self._sessions.values():
-            if session.lifecycle_state != SessionState.READY or not session.stream_attached:
+            if session.lifecycle_state != SessionState.READY:
+                log_notification_skipped(
+                    method=method,
+                    session_id=session.session_id,
+                    reason="session_not_ready",
+                )
                 continue
-            safe_queue_put(get_session_outbound_queue(session), message)
+            if not session.stream_attached:
+                log_notification_skipped(
+                    method=method,
+                    session_id=session.session_id,
+                    reason="stream_not_attached",
+                )
+                continue
+            if safe_queue_put(get_session_outbound_queue(session), message):
+                record_outbound_notification(session, notification)
+                delivered += 1
+        if delivered == 0:
+            log_notification_skipped(method=method, reason="no_ready_sessions_with_stream")
 
     async def shutdown(self) -> None:
         """Close all sessions and cancel pending outbound work (server stop)."""
