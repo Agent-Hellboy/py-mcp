@@ -108,6 +108,22 @@ def test_oauth_protected_resource_metadata_route():
     }
 
 
+def test_oauth_protected_resource_metadata_route_supports_mcp_suffix():
+    config = MiddlewareConfig(
+        oauth=OAuthProtectedResourceConfig(
+            authorization_servers=["https://auth.example.com"],
+            scopes_supported=["files:read"],
+        )
+    )
+    app = create_app(middleware_config=config)
+    client = TestClient(app)
+
+    response = client.get("/.well-known/oauth-protected-resource/mcp")
+
+    assert response.status_code == 200
+    assert response.json()["resource"] == "http://testserver/mcp"
+
+
 def test_create_app_kwargs_forward_oauth_config_to_middleware():
     app = create_app(
         middleware_config=None,

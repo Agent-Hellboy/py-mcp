@@ -101,3 +101,9 @@ When authentication is enabled, task ownership follows the authenticated princip
 - keep JSON authz policies in a separate file
 - pass `authn`, `authz`, and `require_authn` into `create_app()`
 - use capability and tool filtering if clients should not even discover restricted functionality
+
+## Scope Boundary
+
+`pymcp-kit` provides HTTP authentication hooks, authorization hooks, and OAuth protected-resource metadata discovery for MCP resource servers.
+
+It does not implement a full authorization server, a full OAuth client, or token issuance flows. Those belong in your deployment architecture, not in this server toolkit.
