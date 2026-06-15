@@ -45,6 +45,14 @@ Add bearer-token authentication and rule-based authorization without turning the
 
 </div>
 
+<div class="pymcp-card" markdown>
+
+### Spec conformant
+
+Passes the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance) in full against the [2025-11-25 spec](https://modelcontextprotocol.io/specification/2025-11-25), verified in CI on every change.
+
+</div>
+
 </div>
 
 ## Quick Install

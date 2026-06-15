@@ -11,6 +11,16 @@
 - `2025-03-26`
 - `2024-11-05`
 
+## Conformance
+
+`pymcp-kit` passes the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance)
+in full against the [2025-11-25 specification](https://modelcontextprotocol.io/specification/2025-11-25).
+The suite runs in CI on every change (the `MCP Conformance` workflow) against the
+fixture server in `tests/conformance_server.py`, covering tool content blocks
+(text, image, audio, embedded, and mixed resources), tool errors, progress,
+logging, sampling, elicitation (including SEP-1034 defaults and SEP-1330 enum
+variants), resource reads/templates/subscriptions, and prompt retrieval.
+
 ## Built-In HTTP Endpoints
 
 - `GET /`: basic server metadata
@@ -41,6 +51,21 @@ Tool registration supports optional declaration metadata:
 
 Tool handlers may return `structuredContent` alongside `content` blocks in `tools/call` results.
 
+A tool can also accept a `request_context` parameter to report progress. When the
+client includes `_meta.progressToken` on the `tools/call` request, `report_progress`
+emits `notifications/progress`; otherwise it is a no-op.
+
+```python
+from pymcp import tool_registry
+from pymcp.runtime.context import RequestContext
+
+@tool_registry.register(title="Long job")
+async def longJobTool(request_context: RequestContext) -> dict:
+    await request_context.report_progress(0, 100)
+    await request_context.report_progress(100, 100, message="done")
+    return {"content": [{"type": "text", "text": "complete"}]}
+```
+
 ```python
 from pymcp import tool_registry
 
@@ -70,6 +95,10 @@ def addNumbersTool(a: float, b: float) -> dict:
 - `resources/subscribe`
 - `resources/unsubscribe`
 - `notifications/resources/updated`
+
+`resources/subscribe` and `resources/unsubscribe` return an empty result (`{}`)
+per the spec; subscription state is observable through
+`notifications/resources/updated`, not the response body.
 
 ### Roots (Client Capability)
 
