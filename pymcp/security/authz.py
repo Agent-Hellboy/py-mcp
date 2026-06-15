@@ -74,6 +74,13 @@ class AuthorizerProtocol(Protocol[_PrincipalT_contra]):
     ) -> list[JSONObject]:
         ...
 
+    def filter_resource_templates(
+        self,
+        principal: _PrincipalT_contra | None,
+        templates: Sequence[JSONObject],
+    ) -> list[JSONObject]:
+        ...
+
 
 Authorizer: TypeAlias = AuthorizerProtocol[Principal]
 
@@ -153,6 +160,13 @@ class AllowAllAuthorizer:  # pylint: disable=too-few-public-methods,unused-argum
     ) -> list[JSONObject]:
         return list(resources)
 
+    def filter_resource_templates(
+        self,
+        principal: Principal | None,
+        templates: Sequence[JSONObject],
+    ) -> list[JSONObject]:
+        return list(templates)
+
 
 class DenyAllAuthorizer:  # pylint: disable=too-few-public-methods,unused-argument
     """Authorization policy that denies all requests."""
@@ -176,6 +190,13 @@ class DenyAllAuthorizer:  # pylint: disable=too-few-public-methods,unused-argume
         self,
         principal: Principal | None,
         resources: Sequence[JSONObject],
+    ) -> list[JSONObject]:
+        return []
+
+    def filter_resource_templates(
+        self,
+        principal: Principal | None,
+        templates: Sequence[JSONObject],
     ) -> list[JSONObject]:
         return []
 
@@ -210,6 +231,13 @@ class MethodAllowListAuthorizer:  # pylint: disable=too-few-public-methods,unuse
         resources: Sequence[JSONObject],
     ) -> list[JSONObject]:
         return list(resources)
+
+    def filter_resource_templates(
+        self,
+        principal: Principal | None,
+        templates: Sequence[JSONObject],
+    ) -> list[JSONObject]:
+        return list(templates)
 
 
 __all__ = [

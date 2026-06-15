@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from asyncio import TimerHandle, get_running_loop
 from uuid import uuid4
@@ -20,6 +21,8 @@ from ..runtime.payloads import (
 )
 from ..observability.logging import get_logger
 from ..session import get_session_store
+from ..session.queueing import log_client_follow_up_request
+from ..session.types import Session
 from ..settings import SUPPORTED_PROTOCOL_VERSIONS
 from .http_common import accept_contains, get_mcp_session_id, try_parse_json_body
 from .shutdown import ensure_shutdown_event, wait_queue_message
@@ -84,22 +87,57 @@ def _post_headers(request: Request, session_id: str) -> dict[str, str]:
     return {"MCP-Session-Id": session_id}
 
 
-def _log_jsonrpc_start(data: dict) -> None:
+def _log_jsonrpc_start(data: dict, session_id: str, session: Session | None = None) -> None:
     method = data.get("method")
     method_name = method if isinstance(method, str) else "<unknown>"
+    if session is not None and method_name != "<unknown>":
+        log_client_follow_up_request(session, request_method=method_name)
     if method_name == "initialize":
-        logger.info("[HTTP][MCP] server state client connection started")
-        logger.info("[HTTP][MCP] server state handshake started")
-    logger.info("[HTTP][MCP] client -> server request received method=%s", method_name)
-    logger.debug("[HTTP][MCP] client -> server request body method=%s body=%s", method_name, data)
+        logger.info(
+            "[HTTP][MCP] server state client connection started session=%s",
+            session_id,
+        )
+        logger.info(
+            "[HTTP][MCP] server state handshake started session=%s",
+            session_id,
+        )
+    logger.info(
+        "[HTTP][MCP] client -> server request received method=%s session=%s",
+        method_name,
+        session_id,
+    )
+    logger.debug(
+        "[HTTP][MCP] client -> server request body method=%s session=%s body=%s",
+        method_name,
+        session_id,
+        data,
+    )
 
 
-def _log_jsonrpc_complete(method_name: str, status: int, payload: dict | None) -> None:
+def _log_jsonrpc_complete(
+    method_name: str,
+    status: int,
+    payload: dict | None,
+    session_id: str,
+) -> None:
     if method_name == "notifications/initialized" and status == 202:
-        logger.info("[HTTP][MCP] server state handshake complete")
+        logger.info(
+            "[HTTP][MCP] server state handshake complete session=%s",
+            session_id,
+        )
     else:
-        logger.info("[HTTP][MCP] server -> client response sent method=%s status=%s", method_name, status)
-        logger.debug("[HTTP][MCP] server -> client response body method=%s body=%s", method_name, payload)
+        logger.info(
+            "[HTTP][MCP] server -> client response sent method=%s status=%s session=%s",
+            method_name,
+            status,
+            session_id,
+        )
+        logger.debug(
+            "[HTTP][MCP] server -> client response body method=%s session=%s body=%s",
+            method_name,
+            session_id,
+            payload,
+        )
 
 
 def _schedule_connection_complete(request: Request, session_id: str) -> None:
@@ -114,7 +152,10 @@ def _schedule_connection_complete(request: Request, session_id: str) -> None:
 
     def _log_complete() -> None:
         handles.pop(session_id, None)
-        logger.info("[HTTP][MCP] server state client connection complete")
+        logger.info(
+            "[HTTP][MCP] server state client connection complete session=%s",
+            session_id,
+        )
 
     handles[session_id] = get_running_loop().call_later(
         _CONNECTION_COMPLETE_IDLE_SECONDS,
@@ -193,8 +234,32 @@ async def _stream_session_events(
 
             event_id = event_log.next_event_id(stream_id)
             event_log.record(event_id, payload, event_type="message")
+            try:
+                payload_data = json.loads(payload)
+                sse_method = payload_data.get("method")
+                if isinstance(sse_method, str):
+                    logger.info(
+                        "[HTTP][MCP] server -> client sse event method=%s session=%s stream=%s event_id=%s",
+                        sse_method,
+                        session_id,
+                        stream_id,
+                        event_id,
+                    )
+            except json.JSONDecodeError:
+                logger.debug(
+                    "[HTTP][MCP] server -> client sse event session=%s stream=%s event_id=%s non_json_payload=%s",
+                    session_id,
+                    stream_id,
+                    event_id,
+                    payload,
+                )
             yield _format_sse(payload, event="message", event_id=event_id)
     finally:
+        logger.info(
+            "[HTTP][MCP] server state sse stream detached session=%s stream=%s",
+            session_id,
+            stream_id,
+        )
         manager.mark_stream_detached(session_id, stream_id)
 
 
@@ -222,6 +287,11 @@ async def mcp_stream(request: Request) -> Response:
         session_id,
         stream_id=stream_id,
         last_event_id=last_event_id,
+    )
+    logger.info(
+        "[HTTP][MCP] server state sse stream attached session=%s stream=%s",
+        session_id,
+        stream_id,
     )
     return StreamingResponse(
         _stream_session_events(
@@ -276,7 +346,7 @@ async def mcp_post(request: Request) -> Response:
             if principal_error is not None:
                 return principal_error
 
-    _log_jsonrpc_start(data)
+    _log_jsonrpc_start(data, session_id, session)
 
     if method_name is None:
         rpc_id = data.get("id")
@@ -292,7 +362,7 @@ async def mcp_post(request: Request) -> Response:
         app=request.app,
         direct_response=True,
     )
-    _log_jsonrpc_complete(method_name, result.status, result.payload)
+    _log_jsonrpc_complete(method_name, result.status, result.payload, session_id)
     _schedule_connection_complete(request, session_id)
     headers = _post_headers(request, session_id)
     if result.payload is None:

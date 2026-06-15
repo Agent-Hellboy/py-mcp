@@ -44,6 +44,7 @@ class Session:
     pending: dict[str, Any] = field(default_factory=dict)
     request_ids: set[str | int] = field(default_factory=set)
     resource_subscriptions: set[str] = field(default_factory=set)
+    log_level: str | None = None
     pending_requests: dict[str, asyncio.Future[dict[str, Any]]] = field(default_factory=dict)
     pending_elicitations: dict[str, asyncio.Future[dict[str, Any]]] = field(default_factory=dict)
     event_log: EventLog = field(default_factory=EventLog)
@@ -54,6 +55,9 @@ class Session:
     last_acked_event_id: str | None = None
     closed_at: float | None = None
     state_version: int = 0
+    last_outbound_notification_method: str | None = None
+    last_outbound_notification_detail: str | None = None
+    last_outbound_notification_at: float | None = None
 
 
 __all__ = ["Session", "SessionEvent", "SessionState"]

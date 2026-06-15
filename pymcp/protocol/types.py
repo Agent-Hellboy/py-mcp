@@ -65,8 +65,39 @@ class JSONRPCResponse(BaseModel):
 
 
 class Annotations(BaseModel):
-    """Content annotations placeholder."""
+    """Optional metadata for content blocks and tool results."""
 
+    audience: list[Literal["user", "assistant"]] | None = Field(
+        default=None,
+        description="Intended audience for the content",
+    )
+    priority: float | None = Field(default=None, description="Relative priority (0.0-1.0)")
+    lastModified: str | None = Field(default=None, description="ISO 8601 last modified timestamp")
+
+
+class ToolAnnotations(BaseModel):
+    """Client hints describing how a tool behaves."""
+
+    title: str | None = Field(default=None, description="Human-readable tool title")
+    readOnlyHint: bool | None = Field(default=None, description="Tool does not modify its environment")
+    destructiveHint: bool | None = Field(
+        default=None,
+        description="Tool may perform destructive updates",
+    )
+    openWorldHint: bool | None = Field(
+        default=None,
+        description="Tool may interact with an open-ended external universe",
+    )
+    idempotentHint: bool | None = Field(
+        default=None,
+        description="Repeated calls with the same arguments have no additional effect",
+    )
+
+
+class ToolIcon(BaseModel):
+    src: str = Field(..., description="Icon URI")
+    mimeType: str | None = Field(default=None, description="Optional MIME type")
+    sizes: list[str] | None = Field(default=None, description="Optional size descriptors")
 
 class TextContent(BaseModel):
     type: str = Field(default="text", description="Content type")
@@ -108,7 +139,11 @@ ContentBlock: TypeAlias = TextContent | ImageContent | AudioContent | EmbeddedRe
 
 
 class CallToolResult(BaseModel):
-    content: list[ContentBlock] = Field(..., description="Content blocks")
+    content: list[ContentBlock] = Field(default_factory=list, description="Content blocks")
+    structuredContent: JSONValue | None = Field(
+        default=None,
+        description="Structured tool output when the client supports it",
+    )
     isError: bool = Field(default=False, description="Whether this is an error result")
     annotations: Annotations | None = Field(default=None, description="Optional annotations")
 
@@ -137,10 +172,19 @@ class TasksListResult(BaseModel):
 
 class Tool(BaseModel):
     name: str = Field(..., description="Tool name")
+    title: str | None = Field(default=None, description="Human-readable tool title")
     description: str | None = Field(default=None, description="Tool description")
     inputSchema: JSONObject = Field(..., description="JSON Schema for input parameters")
+    outputSchema: JSONObject | None = Field(
+        default=None,
+        description="JSON Schema for structured tool output",
+    )
+    annotations: ToolAnnotations | None = Field(
+        default=None,
+        description="Optional client hints for tool behavior",
+    )
+    icons: list[ToolIcon] | None = Field(default=None, description="Optional tool icons")
     execution: ToolExecutionConfig | None = Field(default=None, description="Execution metadata")
-    annotations: Annotations | None = Field(default=None, description="Optional annotations")
 
 
 class CallToolRequestParams(BaseModel):
@@ -150,6 +194,7 @@ class CallToolRequestParams(BaseModel):
 
 class ListToolsResult(BaseModel):
     tools: list[Tool] = Field(..., description="List of tools")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
 
 
 class PromptArgument(BaseModel):
@@ -171,6 +216,7 @@ class GetPromptRequestParams(BaseModel):
 
 class ListPromptsResult(BaseModel):
     prompts: list[Prompt] = Field(..., description="List of prompts")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
 
 
 class PromptMessage(BaseModel):
@@ -192,6 +238,19 @@ class Resource(BaseModel):
 
 class ListResourcesResult(BaseModel):
     resources: list[Resource] = Field(..., description="List of resources")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
+
+
+class ResourceTemplate(BaseModel):
+    uriTemplate: str = Field(..., description="URI template with parameter placeholders")
+    name: str = Field(..., description="Template name")
+    description: str | None = Field(default=None, description="Template description")
+    mimeType: str | None = Field(default=None, description="MIME type")
+
+
+class ListResourceTemplatesResult(BaseModel):
+    resourceTemplates: list[ResourceTemplate] = Field(..., description="List of resource templates")
+    nextCursor: str | None = Field(default=None, description="Opaque pagination cursor")
 
 
 class Root(BaseModel):
@@ -295,6 +354,10 @@ class LoggingMessageNotificationParams(BaseModel):
     level: str = Field(..., description="Log level (debug, info, warning, error, critical, alert, emergency)")
     logger: str | None = Field(default=None, description="Logger name")
     data: JSONValue | None = Field(default=None, description="Arbitrary log data")
+
+
+class SetLoggingLevelRequestParams(BaseModel):
+    level: str = Field(..., description="Minimum log level for notifications/message")
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +491,7 @@ __all__ = [
     "JSONRPCRequest",
     "JSONRPCResponse",
     "ListPromptsResult",
+    "ListResourceTemplatesResult",
     "ListResourcesResult",
     "ListRootsResult",
     "ListToolsResult",
@@ -444,17 +508,21 @@ __all__ = [
     "ReadResourceResult",
     "Resource",
     "ResourceContents",
+    "ResourceTemplate",
     "ResourcesListChangedNotification",
     "Root",
     "SamplingContentBlock",
     "SamplingToolDefinition",
     "ServerInfo",
+    "SetLoggingLevelRequestParams",
     "Task",
     "TasksListResult",
     "TextContent",
     "TextResourceContents",
     "Tool",
+    "ToolAnnotations",
     "ToolChoice",
+    "ToolIcon",
     "ToolResultContent",
     "ToolUseContent",
     "ToolsListChangedNotification",

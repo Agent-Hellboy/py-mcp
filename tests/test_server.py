@@ -54,11 +54,9 @@ def test_default_server_settings_flow_into_initialize_and_root():
 
 
 def test_streamable_http_route_is_registered():
-    app = create_app()
-    paths = {route.path for route in app.routes}
-    assert "/mcp" in paths
-    assert "/sse-cursor" not in paths
-    assert "/message" not in paths
+    client = TestClient(create_app())
+    assert client.post("/mcp", json={}).status_code != 404
+    assert client.post("/message", json={}).status_code == 404
 
 
 def test_initialize_returns_capabilities(sample_capabilities):
