@@ -2,7 +2,7 @@
 
 [![Python CI](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml/badge.svg)](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml)
 [![codecov](https://codecov.io/gh/Agent-Hellboy/py-mcp/graph/badge.svg)](https://codecov.io/gh/Agent-Hellboy/py-mcp)
-[![MCP Conformance](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/conformance.yml/badge.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
+[![MCP Conformance-v2025-11-25](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/conformance.yml/badge.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
 [![PyPI - Version](https://img.shields.io/pypi/v/pymcp-kit.svg)](https://pypi.org/project/pymcp-kit/)
 [![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-0f766e.svg)](https://agent-hellboy.github.io/py-mcp/)
