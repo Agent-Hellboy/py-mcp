@@ -54,18 +54,10 @@ def test_default_server_settings_flow_into_initialize_and_root():
 
 
 def test_streamable_http_route_is_registered():
-    app = create_app()
-    pending = list(app.routes)
-    paths = set()
-    while pending:
-        route = pending.pop()
-        path = getattr(route, "path", None)
-        if path is not None:
-            paths.add(path)
-        pending.extend(getattr(route, "routes", ()))
-    assert "/mcp" in paths
-    assert "/sse-cursor" not in paths
-    assert "/message" not in paths
+    client = TestClient(create_app())
+    assert client.post("/mcp", json={}).status_code != 404
+    assert client.post("/sse-cursor", json={}).status_code == 404
+    assert client.post("/message", json={}).status_code == 404
 
 
 def test_initialize_returns_capabilities(sample_capabilities):
