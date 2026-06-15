@@ -1,5 +1,5 @@
 site_name: PyMCP Kit
-site_description: Capability-first MCP server toolkit for FastAPI with Streamable HTTP and stdio transport
+site_description: Capability-first, MCP 2025-11-25 spec-compliant server toolkit for FastAPI with Streamable HTTP and stdio transport
 site_author: Prince Roshan
 site_url: https://agent-hellboy.github.io/py-mcp/
 
