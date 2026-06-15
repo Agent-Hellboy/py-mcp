@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from pymcp import create_app
+from pymcp.settings import ServerSettings
 
 
 def _headers(session_id=None, *, accept="application/json, text/event-stream"):
@@ -51,6 +52,34 @@ def test_default_server_settings_flow_into_initialize_and_root():
     body = initialize_response.json()
     assert body["result"]["serverInfo"]["name"] == "pymcp-kit"
     assert body["result"]["serverInfo"]["version"] == "0.1.0"
+
+
+def test_custom_server_settings_include_optional_metadata():
+    client = _build_client(
+        create_app(
+            server_settings=ServerSettings(
+                name="custom-server",
+                version="1.2.3",
+                title="Custom Server",
+                description="Custom description",
+                website_url="https://example.com",
+                icons=[{"src": "https://example.com/icon.svg", "theme": "dark"}],
+            )
+        )
+    )
+
+    root_payload = client.get("/").json()
+    assert root_payload["server"]["title"] == "Custom Server"
+    assert root_payload["server"]["description"] == "Custom description"
+    assert root_payload["server"]["websiteUrl"] == "https://example.com"
+    assert root_payload["server"]["icons"][0]["theme"] == "dark"
+
+    _, initialize_response = _initialize_session(client)
+    server_info = initialize_response.json()["result"]["serverInfo"]
+    assert server_info["title"] == "Custom Server"
+    assert server_info["description"] == "Custom description"
+    assert server_info["websiteUrl"] == "https://example.com"
+    assert server_info["icons"][0]["theme"] == "dark"
 
 
 def test_streamable_http_route_is_registered():

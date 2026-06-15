@@ -98,6 +98,7 @@ class ToolIcon(BaseModel):
     src: str = Field(..., description="Icon URI")
     mimeType: str | None = Field(default=None, description="Optional MIME type")
     sizes: list[str] | None = Field(default=None, description="Optional size descriptors")
+    theme: Literal["light", "dark"] | None = Field(default=None, description="Optional theme hint")
 
 class TextContent(BaseModel):
     type: str = Field(default="text", description="Content type")
@@ -109,12 +110,14 @@ class ImageContent(BaseModel):
     type: str = Field(default="image", description="Content type")
     data: str = Field(..., description="Base64-encoded image data")
     mimeType: str = Field(..., description="MIME type")
+    annotations: Annotations | None = Field(default=None, description="Optional annotations")
 
 
 class AudioContent(BaseModel):
     type: str = Field(default="audio", description="Content type")
     data: str = Field(..., description="Base64-encoded audio data")
     mimeType: str = Field(..., description="MIME type")
+    annotations: Annotations | None = Field(default=None, description="Optional annotations")
 
 
 class ResourceContents(BaseModel):
@@ -133,9 +136,7 @@ class BlobResourceContents(ResourceContents):
 class EmbeddedResource(BaseModel):
     type: str = Field(default="resource", description="Content type")
     resource: ResourceContents = Field(..., description="Embedded resource")
-
-
-ContentBlock: TypeAlias = TextContent | ImageContent | AudioContent | EmbeddedResource
+    annotations: Annotations | None = Field(default=None, description="Optional annotations")
 
 
 class CallToolResult(BaseModel):
@@ -205,8 +206,10 @@ class PromptArgument(BaseModel):
 
 class Prompt(BaseModel):
     name: str = Field(..., description="Prompt name")
+    title: str | None = Field(default=None, description="Human-readable prompt title")
     description: str | None = Field(default=None, description="Prompt description")
     arguments: list[PromptArgument] | None = Field(default=None, description="Prompt arguments")
+    icons: list[ToolIcon] | None = Field(default=None, description="Optional prompt icons")
 
 
 class GetPromptRequestParams(BaseModel):
@@ -232,8 +235,19 @@ class GetPromptResult(BaseModel):
 class Resource(BaseModel):
     uri: str = Field(..., description="Resource URI")
     name: str = Field(..., description="Resource name")
+    title: str | None = Field(default=None, description="Human-readable resource title")
     description: str | None = Field(default=None, description="Resource description")
     mimeType: str | None = Field(default=None, description="MIME type")
+    icons: list[ToolIcon] | None = Field(default=None, description="Optional resource icons")
+    annotations: Annotations | None = Field(default=None, description="Optional annotations")
+    size: int | None = Field(default=None, description="Size in bytes")
+
+
+class ResourceLink(Resource):
+    type: str = Field(default="resource_link", description="Content type")
+
+
+ContentBlock: TypeAlias = TextContent | ImageContent | AudioContent | ResourceLink | EmbeddedResource
 
 
 class ListResourcesResult(BaseModel):
@@ -244,8 +258,11 @@ class ListResourcesResult(BaseModel):
 class ResourceTemplate(BaseModel):
     uriTemplate: str = Field(..., description="URI template with parameter placeholders")
     name: str = Field(..., description="Template name")
+    title: str | None = Field(default=None, description="Human-readable template title")
     description: str | None = Field(default=None, description="Template description")
     mimeType: str | None = Field(default=None, description="MIME type")
+    icons: list[ToolIcon] | None = Field(default=None, description="Optional template icons")
+    annotations: Annotations | None = Field(default=None, description="Optional annotations")
 
 
 class ListResourceTemplatesResult(BaseModel):
@@ -428,6 +445,10 @@ class ProgressNotification(BaseModel):
 class ServerInfo(BaseModel):
     name: str = Field(..., description="Server name")
     version: str = Field(..., description="Server version")
+    title: str | None = Field(default=None, description="Human-readable server title")
+    description: str | None = Field(default=None, description="Server description")
+    websiteUrl: str | None = Field(default=None, description="Server website")
+    icons: list[ToolIcon] | None = Field(default=None, description="Optional server icons")
 
 
 class InitializeParams(BaseModel):
@@ -517,6 +538,7 @@ __all__ = [
     "ReadResourceResult",
     "Resource",
     "ResourceContents",
+    "ResourceLink",
     "ResourceTemplate",
     "ResourcesListChangedNotification",
     "Root",

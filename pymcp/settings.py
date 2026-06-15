@@ -46,6 +46,10 @@ class ServerSettings:
     version: str = "0.1.0"
     protocol_versions: tuple[str, ...] = SUPPORTED_PROTOCOL_VERSIONS
     capabilities: CapabilitySettings = field(default_factory=CapabilitySettings)
+    title: str | None = None
+    description: str | None = None
+    website_url: str | None = None
+    icons: list[JSONObject] | None = None
 
     def __post_init__(self) -> None:
         if not self.protocol_versions:

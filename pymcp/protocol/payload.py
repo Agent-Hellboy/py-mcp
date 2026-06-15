@@ -86,13 +86,22 @@ class PayloadFactory:
             server_capabilities = ServerCapabilities(capabilities={})  # pragma: no cover - app path used in runtime
 
         negotiated_capabilities = negotiate_capabilities(client_capabilities, server_capabilities)
+        server_info: JSONObject = {
+            "name": server_settings.name,
+            "version": server_settings.version,
+        }
+        if server_settings.title is not None:
+            server_info["title"] = server_settings.title
+        if server_settings.description is not None:
+            server_info["description"] = server_settings.description
+        if server_settings.website_url is not None:
+            server_info["websiteUrl"] = server_settings.website_url
+        if server_settings.icons is not None:
+            server_info["icons"] = server_settings.icons
         result: JSONObject = {
             "protocolVersion": self.protocol_version,
             "capabilities": negotiated_capabilities,
-            "serverInfo": {
-                "name": server_settings.name,
-                "version": server_settings.version,
-            },
+            "serverInfo": server_info,
         }
         return self.success(rpc_id, result)
 
