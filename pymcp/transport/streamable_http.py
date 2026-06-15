@@ -203,14 +203,20 @@ async def _stream_session_events(
     session,
     stream_id: str,
     *,
+    last_event_id: str | None = None,
     heartbeat_interval: float = 10.0,
     poll_interval: float = 1.0,
 ):
     manager = get_session_store(request.app)
     shutdown = ensure_shutdown_event(request.app)
+    event_log = session.event_log
     yield ": connected\n\n"
 
-    counter = 0
+    resume_stream_id, after_seq = event_log.should_resume(last_event_id)
+    if resume_stream_id is not None and after_seq is not None:
+        for replay_event_id, replay_payload in event_log.replay(resume_stream_id, after_seq):
+            yield _format_sse(replay_payload, event="message", event_id=replay_event_id)
+
     try:
         while True:
             if shutdown.is_set() or await request.is_disconnected():
@@ -226,7 +232,8 @@ async def _stream_session_events(
                 yield ": ping\n\n"
                 continue
 
-            counter += 1
+            event_id = event_log.next_event_id(stream_id)
+            event_log.record(event_id, payload, event_type="message")
             try:
                 payload_data = json.loads(payload)
                 sse_method = payload_data.get("method")
@@ -236,17 +243,17 @@ async def _stream_session_events(
                         sse_method,
                         session_id,
                         stream_id,
-                        f"{stream_id}:{counter}",
+                        event_id,
                     )
             except json.JSONDecodeError:
                 logger.debug(
                     "[HTTP][MCP] server -> client sse event session=%s stream=%s event_id=%s non_json_payload=%s",
                     session_id,
                     stream_id,
-                    f"{stream_id}:{counter}",
+                    event_id,
                     payload,
                 )
-            yield _format_sse(payload, event="message", event_id=f"{stream_id}:{counter}")
+            yield _format_sse(payload, event="message", event_id=event_id)
     finally:
         logger.info(
             "[HTTP][MCP] server state sse stream detached session=%s stream=%s",
@@ -273,11 +280,13 @@ async def mcp_stream(request: Request) -> Response:
     if session is None:
         return _jsonrpc_http_error(404, SESSION_NOT_FOUND, "Session not found")
 
-    stream_id = str(uuid4())
+    last_event_id = request.headers.get("Last-Event-ID")
+    resume_stream_id, _ = session.event_log.should_resume(last_event_id)
+    stream_id = resume_stream_id or str(uuid4())
     await manager.note_stream_open(
         session_id,
         stream_id=stream_id,
-        last_event_id=request.headers.get("Last-Event-ID"),
+        last_event_id=last_event_id,
     )
     logger.info(
         "[HTTP][MCP] server state sse stream attached session=%s stream=%s",
@@ -285,7 +294,13 @@ async def mcp_stream(request: Request) -> Response:
         stream_id,
     )
     return StreamingResponse(
-        _stream_session_events(request, session_id, session, stream_id),
+        _stream_session_events(
+            request,
+            session_id,
+            session,
+            stream_id,
+            last_event_id=last_event_id,
+        ),
         media_type="text/event-stream",
         headers=_stream_headers(),
     )
