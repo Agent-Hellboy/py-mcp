@@ -22,7 +22,7 @@ async def handle_logging_set_level(ctx: DispatchContext) -> DispatchResult:
         payload = ctx.payloads().error(
             ctx.rpc_id,
             MCPErrorCode.INVALID_PARAMS,
-            "Invalid params: missing level",
+            "Invalid params: level must be a non-empty string",
         )
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
