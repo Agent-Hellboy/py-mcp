@@ -16,6 +16,7 @@ from ..settings import SUPPORTED_PROTOCOL_VERSIONS as SERVER_SUPPORTED_PROTOCOL_
 from .errors import MCPErrorCode
 from .json_types import JSONValue, JSONObject, RPCId
 from .jsonrpc import build_error_envelope, build_result_envelope
+from .meta import attach_meta
 
 
 SUPPORTED_PROTOCOL_VERSIONS: Final[tuple[str, ...]] = SERVER_SUPPORTED_PROTOCOL_VERSIONS
@@ -30,9 +31,7 @@ def error(rpc_id: RPCId, code: int, message: str, *, data: JSONValue | None = No
 
 
 def with_meta(payload: JSONObject, meta: JSONObject) -> JSONObject:
-    merged = dict(payload)
-    merged["_meta"] = meta
-    return merged
+    return attach_meta(payload, meta)
 
 
 def negotiate_protocol_version(

@@ -125,8 +125,8 @@ async def handle_elicitation_create(ctx: DispatchContext) -> DispatchResult:
         return make_result(200, json_response=True, payload=payload)
 
     task_id = None
-    meta = ctx.data.get("_meta") or ctx.data.get("meta") or {}
-    if isinstance(meta, dict):
+    meta = ctx.request_meta
+    if meta:
         related = meta.get("io.modelcontextprotocol/related-task")
         if isinstance(related, dict):
             task_id_value = related.get("taskId")
