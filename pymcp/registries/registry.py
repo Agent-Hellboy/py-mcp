@@ -182,8 +182,6 @@ class PromptDefinition:
     description: str
     arguments: list[dict[str, Any]]
     function: SyncOrAsyncCallable
-    title: str | None = None
-    icons: list[dict[str, Any]] | None = None
 
     def to_mcp_payload(self) -> dict[str, Any]:
         payload = {
@@ -191,10 +189,6 @@ class PromptDefinition:
             "description": self.description,
             "arguments": [],
         }
-        if self.title:
-            payload["title"] = self.title
-        if self.icons:
-            payload["icons"] = [dict(icon) for icon in self.icons]
         args: list[dict[str, Any]] = []
         for argument in self.arguments:
             args.append(
@@ -215,27 +209,14 @@ class ResourceDefinition:
     description: str
     mime_type: str
     function: SyncOrAsyncCallable
-    title: str | None = None
-    icons: list[dict[str, Any]] | None = None
-    annotations: dict[str, Any] | None = None
-    size: int | None = None
 
     def to_mcp_payload(self) -> dict[str, Any]:
-        payload = {
+        return {
             "uri": self.uri,
             "name": self.name,
             "description": self.description,
             "mimeType": self.mime_type,
         }
-        if self.title:
-            payload["title"] = self.title
-        if self.icons:
-            payload["icons"] = [dict(icon) for icon in self.icons]
-        if self.annotations:
-            payload["annotations"] = dict(self.annotations)
-        if self.size is not None:
-            payload["size"] = self.size
-        return payload
 
 
 @dataclass(slots=True)
@@ -246,28 +227,18 @@ class ResourceTemplateDefinition:
     mime_type: str
     function: SyncOrAsyncCallable
     variables: dict[str, dict[str, Any]] | None = None
-    title: str | None = None
-    icons: list[dict[str, Any]] | None = None
-    annotations: dict[str, Any] | None = None
     _matcher: re.Pattern[str] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_matcher", compile_uri_template(self.uri_template))
 
     def to_mcp_payload(self) -> dict[str, Any]:
-        payload = {
+        return {
             "uriTemplate": self.uri_template,
             "name": self.name,
             "description": self.description,
             "mimeType": self.mime_type,
         }
-        if self.title:
-            payload["title"] = self.title
-        if self.icons:
-            payload["icons"] = [dict(icon) for icon in self.icons]
-        if self.annotations:
-            payload["annotations"] = dict(self.annotations)
-        return payload
 
     def match(self, uri: str) -> dict[str, str] | None:
         match = self._matcher.match(uri)
@@ -459,8 +430,6 @@ class PromptRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         arguments: list[dict[str, Any]] | None = None,
-        title: str | None = None,
-        icons: Any = None,
     ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
         if func is None:
             return lambda callback: self.register(
@@ -468,8 +437,6 @@ class PromptRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 arguments=arguments,
-                title=title,
-                icons=icons,
             )
 
         manager = get_current_registry_manager()
@@ -479,8 +446,6 @@ class PromptRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 arguments=arguments,
-                title=title,
-                icons=icons,
             )
 
         prompt_name = name or func.__name__
@@ -490,8 +455,6 @@ class PromptRegistry(_RegistryBase):
             description=prompt_description,
             arguments=arguments if arguments is not None else _arguments_from_signature(func),
             function=func,
-            title=title,
-            icons=_normalize_tool_icons(icons),
         )
         self._prompts[prompt_name] = definition
         self._notify_listeners()
@@ -542,10 +505,6 @@ class ResourceRegistry(_RegistryBase):
         name: str | None = None,
         description: str | None = None,
         mime_type: str = "text/plain",
-        title: str | None = None,
-        icons: Any = None,
-        annotations: Any = None,
-        size: int | None = None,
     ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
         if func is None:
             return lambda callback: self.register(
@@ -554,10 +513,6 @@ class ResourceRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 mime_type=mime_type,
-                title=title,
-                icons=icons,
-                annotations=annotations,
-                size=size,
             )
 
         manager = get_current_registry_manager()
@@ -568,10 +523,6 @@ class ResourceRegistry(_RegistryBase):
                 name=name,
                 description=description,
                 mime_type=mime_type,
-                title=title,
-                icons=icons,
-                annotations=annotations,
-                size=size,
             )
 
         resource_name = name or func.__name__
@@ -582,10 +533,6 @@ class ResourceRegistry(_RegistryBase):
             description=resource_description,
             mime_type=mime_type,
             function=func,
-            title=title,
-            icons=_normalize_tool_icons(icons),
-            annotations=_normalize_tool_annotations(annotations),
-            size=size,
         )
         self._resources[uri] = definition
         self._notify_listeners()
@@ -600,9 +547,6 @@ class ResourceRegistry(_RegistryBase):
         description: str | None = None,
         mime_type: str = "text/plain",
         variables: dict[str, dict[str, Any]] | None = None,
-        title: str | None = None,
-        icons: Any = None,
-        annotations: Any = None,
     ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
         if func is None:
             return lambda callback: self.register_template(
@@ -612,9 +556,6 @@ class ResourceRegistry(_RegistryBase):
                 description=description,
                 mime_type=mime_type,
                 variables=variables,
-                title=title,
-                icons=icons,
-                annotations=annotations,
             )
 
         manager = get_current_registry_manager()
@@ -626,9 +567,6 @@ class ResourceRegistry(_RegistryBase):
                 description=description,
                 mime_type=mime_type,
                 variables=variables,
-                title=title,
-                icons=icons,
-                annotations=annotations,
             )
 
         template_name = name or func.__name__
@@ -640,9 +578,6 @@ class ResourceRegistry(_RegistryBase):
             mime_type=mime_type,
             function=func,
             variables=variables,
-            title=title,
-            icons=_normalize_tool_icons(icons),
-            annotations=_normalize_tool_annotations(annotations),
         )
         signature = inspect.signature(func)
         available = set(definition._matcher.groupindex)
