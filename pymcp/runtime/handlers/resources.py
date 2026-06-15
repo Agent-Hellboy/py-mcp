@@ -109,23 +109,16 @@ async def _handle_resource_subscription(ctx: DispatchContext, *, unsubscribe: bo
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 
-    subscribed: list[str] = []
-    unsubscribed: list[str] = []
     for uri in uris:
         if unsubscribe:
-            if ctx.session_manager.unsubscribe_resource(ctx.session_id, uri):
-                unsubscribed.append(uri)
+            ctx.session_manager.unsubscribe_resource(ctx.session_id, uri)
         else:
-            if ctx.session_manager.subscribe_resource(ctx.session_id, uri):
-                subscribed.append(uri)
+            ctx.session_manager.subscribe_resource(ctx.session_id, uri)
 
-    payload = ctx.payloads().success(
-        ctx.rpc_id,
-        {
-            "subscribed": subscribed,
-            "unsubscribed": unsubscribed,
-        },
-    )
+    # Per the MCP spec, resources/subscribe and resources/unsubscribe return an
+    # empty result; subscription state is observable via resource update
+    # notifications, not the response body.
+    payload = ctx.payloads().success(ctx.rpc_id, {})
     await ctx.maybe_enqueue(payload)
     return make_result(200, json_response=True, payload=payload)
 

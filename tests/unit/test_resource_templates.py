@@ -178,4 +178,4 @@ async def test_template_resource_subscription():
         app=app,
         direct_response=True,
     )
-    assert subscribe.payload["result"]["subscribed"] == ["note://release"]
+    assert subscribe.payload["result"] == {}

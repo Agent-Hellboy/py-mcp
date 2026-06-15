@@ -178,6 +178,12 @@ async def handle_tools_call(ctx: DispatchContext) -> DispatchResult:
     cancel_token = CancellationToken(token, ctx.cancellation_manager)
 
     try:
+        meta = ctx.request_meta
+        progress_token = None
+        if meta:
+            token = meta.get("progressToken")
+            if isinstance(token, (str, int)) and token != "":
+                progress_token = token
         request_context = RequestContext(
             app_context=AppContext(ctx.app),
             session_context=SessionContext(
@@ -186,6 +192,7 @@ async def handle_tools_call(ctx: DispatchContext) -> DispatchResult:
                 user=ctx.session.principal,
             ),
             task_context=None,
+            progress_token=progress_token,
         )
         tool_func, tool_args = prepare_tool_invocation(
             tool_info=tool,
