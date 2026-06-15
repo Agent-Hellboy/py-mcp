@@ -10,6 +10,7 @@ from pymcp.session.notifications import send_log_message
 from pymcp.session.store import get_session_manager
 from pymcp.session.types import SessionState
 from pymcp.settings import CapabilitySettings, ServerSettings
+from tests.support import initialize_ready_session
 
 
 pytestmark = pytest.mark.anyio
@@ -31,32 +32,6 @@ async def _ready_session(app):
     await manager.mark_initialized(session.session_id)
     session.stream_attached = True
     return session
-
-
-async def _initialize_session(app):
-    manager = get_session_manager(app)
-    session = manager.create_session()
-    await process_jsonrpc_message(
-        session.session_id,
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {"protocolVersion": "2025-11-25"},
-        },
-        app=app,
-        direct_response=True,
-    )
-    await process_jsonrpc_message(
-        session.session_id,
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        app=app,
-        direct_response=True,
-    )
-    await manager.note_stream_open(session.session_id, stream_id="stream-1")
-    return session
-
-
 async def test_send_log_message_basic():
     app = _logging_app()
     session = await _ready_session(app)
@@ -117,7 +92,8 @@ async def test_send_log_message_requires_logging_capability():
 
 async def test_logging_set_level():
     app = _logging_app()
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
+    await get_session_manager(app).note_stream_open(session.session_id, stream_id="stream-1")
 
     response = await process_jsonrpc_message(
         session.session_id,
@@ -136,7 +112,8 @@ async def test_logging_set_level():
 
 async def test_logging_set_level_rejects_invalid_level():
     app = _logging_app()
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
+    await get_session_manager(app).note_stream_open(session.session_id, stream_id="stream-1")
 
     response = await process_jsonrpc_message(
         session.session_id,
@@ -154,7 +131,8 @@ async def test_logging_set_level_rejects_invalid_level():
 
 async def test_logging_set_level_filters_notifications():
     app = _logging_app()
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
+    await get_session_manager(app).note_stream_open(session.session_id, stream_id="stream-1")
 
     await process_jsonrpc_message(
         session.session_id,
@@ -178,7 +156,8 @@ async def test_logging_set_level_filters_notifications():
 
 async def test_logging_set_level_not_supported_when_capability_disabled():
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
+    await get_session_manager(app).note_stream_open(session.session_id, stream_id="stream-1")
 
     response = await process_jsonrpc_message(
         session.session_id,

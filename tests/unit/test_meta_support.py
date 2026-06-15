@@ -12,28 +12,7 @@ from pymcp.protocol.meta import (
 )
 from pymcp.protocol.errors import MCPErrorCode
 from pymcp.registry import tool_registry
-
-
-def _headers(session_id=None, *, accept="application/json, text/event-stream"):
-    headers = {"Accept": accept}
-    if session_id:
-        headers["MCP-Session-Id"] = session_id
-    return headers
-
-
-def _initialize_session(client: TestClient):
-    payload = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2025-06-18",
-            "clientInfo": {"name": "test-client", "version": "1.0.0"},
-        },
-    }
-    response = client.post("/mcp", json=payload, headers=_headers())
-    assert response.status_code == 200
-    return response.headers["MCP-Session-Id"]
+from tests.support import initialize_http_session, jsonrpc_headers
 
 
 def test_validate_meta_value_rejects_non_object():
@@ -100,11 +79,11 @@ def test_split_result_meta_strips_invalid_meta():
 
 def test_dispatch_rejects_invalid_request_meta():
     client = TestClient(create_app())
-    session_id = _initialize_session(client)
+    session_id, _ = initialize_http_session(client)
     client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
 
     response = client.post(
@@ -115,7 +94,7 @@ def test_dispatch_rejects_invalid_request_meta():
             "method": "tools/list",
             "_meta": "not-an-object",
         },
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     body = response.json()
@@ -132,11 +111,11 @@ def test_tools_call_lifts_result_meta_to_response_envelope():
         }
 
     client = TestClient(create_app())
-    session_id = _initialize_session(client)
+    session_id, _ = initialize_http_session(client)
     client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
 
     response = client.post(
@@ -147,7 +126,7 @@ def test_tools_call_lifts_result_meta_to_response_envelope():
             "method": "tools/call",
             "params": {"name": "meta_tool", "arguments": {}},
         },
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     body = response.json()

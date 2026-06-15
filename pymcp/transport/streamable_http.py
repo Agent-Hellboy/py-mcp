@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from asyncio import TimerHandle, get_running_loop
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Request
@@ -48,13 +49,21 @@ def _allowed_origins() -> frozenset[str]:
     return frozenset(origin.strip() for origin in raw.split(",") if origin.strip())
 
 
+def _is_loopback_origin(origin: str) -> bool:
+    parsed = urlparse(origin)
+    if parsed.scheme != "http":
+        return False
+    hostname = (parsed.hostname or "").lower()
+    return hostname in {"localhost", "127.0.0.1", "::1"}
+
+
 def _jsonrpc_http_error(status_code: int, code: int, message: str) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=error_response(None, code, message))
 
 
 def _reject_invalid_origin(request: Request) -> Response | None:
     origin = request.headers.get("origin")
-    if not origin or origin in _allowed_origins():
+    if not origin or origin in _allowed_origins() or _is_loopback_origin(origin):
         return None
     return _jsonrpc_http_error(403, FORBIDDEN, f"Forbidden origin: {origin}")
 
