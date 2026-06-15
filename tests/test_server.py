@@ -38,11 +38,11 @@ def test_default_server_settings_flow_into_initialize_and_root():
     assert response.status_code == 200
     root_payload = response.json()
     assert root_payload["server"]["name"] == "pymcp-kit"
-    assert root_payload["server"]["version"] == "0.1.0"
+    assert root_payload["server"]["version"] == "0.2.0"
 
     _, body = _initialize_session(client)
     assert body["result"]["serverInfo"]["name"] == "pymcp-kit"
-    assert body["result"]["serverInfo"]["version"] == "0.1.0"
+    assert body["result"]["serverInfo"]["version"] == "0.2.0"
 
 
 def test_custom_server_settings_include_optional_metadata():
