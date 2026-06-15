@@ -311,8 +311,15 @@ async def mcp_post(request: Request) -> Response:
     rejected = _reject_invalid_origin(request) or _reject_invalid_protocol_version(request)
     if rejected:
         return rejected
-    if not accept_contains(request, "application/json"):
-        return _jsonrpc_http_error(406, INVALID_PARAMS, "Accept header must include application/json")
+    if not (
+        accept_contains(request, "application/json")
+        and accept_contains(request, "text/event-stream")
+    ):
+        return _jsonrpc_http_error(
+            406,
+            INVALID_PARAMS,
+            "Accept header must include application/json and text/event-stream",
+        )
 
     body = await try_parse_json_body(request)
     if body is None:

@@ -54,7 +54,7 @@ async def test_streamable_http_response_only_resolves_pending_elicitation():
         "/mcp",
         json={"jsonrpc": "2.0", "id": "elic-1", "result": {"action": "accept"}},
         headers={
-            "Accept": "application/json",
+            "Accept": "application/json, text/event-stream",
             "MCP-Session-Id": session.session_id,
         },
     )

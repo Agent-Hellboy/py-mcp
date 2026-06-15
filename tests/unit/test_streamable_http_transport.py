@@ -146,3 +146,24 @@ def test_streamable_http_preserves_session_principal_and_rejects_mismatch():
     )
     assert mismatched.status_code == 403
     assert mismatched.json()["error"]["message"] == "Session principal mismatch"
+
+
+@pytest.mark.parametrize(
+    "accept",
+    [
+        "application/json",
+        "text/event-stream",
+        "application/json, text/event-stream;q=0",
+    ],
+)
+def test_streamable_http_post_requires_json_and_sse_accept_types(accept):
+    client = TestClient(create_app(middleware_config=None))
+    response = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        headers={"Accept": accept},
+    )
+    assert response.status_code == 406
+    assert response.json()["error"]["message"] == (
+        "Accept header must include application/json and text/event-stream"
+    )
