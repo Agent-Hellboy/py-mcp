@@ -2,13 +2,7 @@ from fastapi.testclient import TestClient
 
 from pymcp import create_app
 from pymcp.settings import ServerSettings
-
-
-def _headers(session_id=None, *, accept="application/json, text/event-stream"):
-    headers = {"Accept": accept}
-    if session_id:
-        headers["MCP-Session-Id"] = session_id
-    return headers
+from tests.support import initialize_http_session, jsonrpc_headers
 
 
 def _build_client(app=None):
@@ -16,18 +10,16 @@ def _build_client(app=None):
 
 
 def _initialize_session(client: TestClient, *, protocol_version: str = "2025-06-18"):
-    payload = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": protocol_version,
-            "clientInfo": {"name": "test-client", "version": "1.0.0"},
-        },
-    }
-    response = client.post("/mcp", json=payload, headers=_headers())
-    assert response.status_code == 200
-    return response.headers["MCP-Session-Id"], response
+    return initialize_http_session(client, protocol_version=protocol_version)
+
+
+def _send_initialized(client: TestClient, session_id: str):
+    response = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+        headers=jsonrpc_headers(session_id),
+    )
+    assert response.status_code == 202
 
 
 def test_root():
@@ -48,8 +40,7 @@ def test_default_server_settings_flow_into_initialize_and_root():
     assert root_payload["server"]["name"] == "pymcp-kit"
     assert root_payload["server"]["version"] == "0.1.0"
 
-    _, initialize_response = _initialize_session(client)
-    body = initialize_response.json()
+    _, body = _initialize_session(client)
     assert body["result"]["serverInfo"]["name"] == "pymcp-kit"
     assert body["result"]["serverInfo"]["version"] == "0.1.0"
 
@@ -75,7 +66,7 @@ def test_custom_server_settings_include_optional_metadata():
     assert root_payload["server"]["icons"][0]["theme"] == "dark"
 
     _, initialize_response = _initialize_session(client)
-    server_info = initialize_response.json()["result"]["serverInfo"]
+    server_info = initialize_response["result"]["serverInfo"]
     assert server_info["title"] == "Custom Server"
     assert server_info["description"] == "Custom description"
     assert server_info["websiteUrl"] == "https://example.com"
@@ -90,8 +81,7 @@ def test_streamable_http_route_is_registered():
 
 def test_initialize_returns_capabilities(sample_capabilities):
     client = _build_client()
-    session_id, response = _initialize_session(client)
-    body = response.json()
+    session_id, body = _initialize_session(client)
     assert session_id
     assert body["result"]["protocolVersion"] == "2025-06-18"
     assert "tools" in body["result"]["capabilities"]
@@ -104,7 +94,7 @@ def test_requests_without_session_header_are_rejected():
     response = client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-        headers=_headers(),
+        headers=jsonrpc_headers(),
     )
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "MCP-Session-Id header required"
@@ -113,16 +103,12 @@ def test_requests_without_session_header_are_rejected():
 def test_tool_list_and_call(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
-    client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
-    )
+    _send_initialized(client, session_id)
 
     response = client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     tools = response.json()["result"]["tools"]
@@ -137,7 +123,7 @@ def test_tool_list_and_call(sample_capabilities):
             "method": "tools/call",
             "params": {"name": "add_numbers_tool", "arguments": {"a": 2, "b": 3}},
         },
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     assert response.json()["result"]["content"][0]["text"] == "Sum of 2 + 3 = 5"
@@ -146,16 +132,12 @@ def test_tool_list_and_call(sample_capabilities):
 def test_prompt_methods(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
-    client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
-    )
+    _send_initialized(client, session_id)
 
     response = client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 2, "method": "prompts/list"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     prompts = response.json()["result"]["prompts"]
@@ -169,7 +151,7 @@ def test_prompt_methods(sample_capabilities):
             "method": "prompts/get",
             "params": {"name": "summarize_prompt", "arguments": {"topic": "latency"}},
         },
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     message = response.json()["result"]["messages"][0]["content"]["text"]
@@ -179,16 +161,12 @@ def test_prompt_methods(sample_capabilities):
 def test_resource_methods(sample_capabilities):
     client = _build_client()
     session_id, _ = _initialize_session(client)
-    client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
-    )
+    _send_initialized(client, session_id)
 
     response = client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 2, "method": "resources/list"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     resources = response.json()["result"]["resources"]
@@ -202,7 +180,7 @@ def test_resource_methods(sample_capabilities):
             "method": "resources/read",
             "params": {"uri": "memo://release-plan"},
         },
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     assert response.json()["result"]["contents"][0]["mimeType"] == "text/markdown"
@@ -211,13 +189,7 @@ def test_resource_methods(sample_capabilities):
 def test_initialized_notification_is_accepted():
     client = _build_client()
     session_id, _ = _initialize_session(client)
-
-    response = client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
-    )
-    assert response.status_code == 202
+    _send_initialized(client, session_id)
 
 
 def test_methods_remain_blocked_until_initialized_notification(sample_capabilities):
@@ -227,7 +199,7 @@ def test_methods_remain_blocked_until_initialized_notification(sample_capabiliti
     response = client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert response.status_code == 200
     assert response.json()["error"]["message"] == "server not initialized."
@@ -236,14 +208,10 @@ def test_methods_remain_blocked_until_initialized_notification(sample_capabiliti
 def test_double_initialize_is_rejected():
     client = _build_client()
     payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
-    first = client.post("/mcp", json=payload, headers=_headers())
+    first = client.post("/mcp", json=payload, headers=jsonrpc_headers())
     session_id = first.headers["MCP-Session-Id"]
-    client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-        headers=_headers(session_id),
-    )
-    second = client.post("/mcp", json=payload, headers=_headers(session_id))
+    _send_initialized(client, session_id)
+    second = client.post("/mcp", json=payload, headers=jsonrpc_headers(session_id))
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["error"]["message"] == "server already initialized."
@@ -251,7 +219,7 @@ def test_double_initialize_is_rejected():
 
 def test_stream_requires_session_header():
     client = _build_client()
-    response = client.get("/mcp", headers=_headers(accept="text/event-stream"))
+    response = client.get("/mcp", headers=jsonrpc_headers(accept="text/event-stream"))
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "MCP-Session-Id header required"
 
@@ -259,14 +227,15 @@ def test_stream_requires_session_header():
 def test_delete_closes_session():
     client = _build_client()
     session_id, _ = _initialize_session(client)
+    _send_initialized(client, session_id)
 
-    response = client.delete("/mcp", headers=_headers(session_id))
+    response = client.delete("/mcp", headers=jsonrpc_headers(session_id))
     assert response.status_code == 204
 
     follow_up = client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-        headers=_headers(session_id),
+        headers=jsonrpc_headers(session_id),
     )
     assert follow_up.status_code == 404
     assert follow_up.json()["error"]["message"] == "Session not found"

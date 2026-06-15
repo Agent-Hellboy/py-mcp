@@ -55,7 +55,7 @@ async def test_resource_subscriptions_emit_update_notifications():
         app=app,
         direct_response=True,
     )
-    assert subscribe.payload["result"]["subscribed"] == ["memo://subscription-test"]
+    assert subscribe.payload["result"] == {}
 
     app.state.registry_manager.resource_registry.notify_updated("memo://subscription-test")
     message = json.loads(await session.queue.get())
@@ -73,4 +73,4 @@ async def test_resource_subscriptions_emit_update_notifications():
         app=app,
         direct_response=True,
     )
-    assert unsubscribe.payload["result"]["unsubscribed"] == ["memo://subscription-test"]
+    assert unsubscribe.payload["result"] == {}

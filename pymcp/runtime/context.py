@@ -34,6 +34,7 @@ class RequestContext:
     app_context: AppContext
     session_context: SessionContext
     task_context: TaskContext | None = None
+    progress_token: str | int | None = None
 
     @property
     def app(self) -> FastAPI:
@@ -42,6 +43,34 @@ class RequestContext:
     @property
     def session_id(self) -> str | None:
         return self.session_context.session_id
+
+    async def report_progress(
+        self,
+        progress: float,
+        total: float | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Emit ``notifications/progress`` for the request's progress token.
+
+        No-op when the client did not supply a ``_meta.progressToken``.
+        """
+        if not self.progress_token or self.session_id is None:
+            return
+        from ..session.notifications import send_notification
+        from ..session.store import get_session_manager
+
+        session = get_session_manager(self.app).get_session(self.session_id)
+        if session is None:
+            return
+        params: JSONObject = {"progressToken": self.progress_token, "progress": progress}
+        if total is not None:
+            params["total"] = total
+        if message is not None:
+            params["message"] = message
+        await send_notification(
+            session,
+            {"jsonrpc": "2.0", "method": "notifications/progress", "params": params},
+        )
 
 
 __all__ = ["AppContext", "RequestContext", "SessionContext"]

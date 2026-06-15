@@ -4,36 +4,10 @@ from pymcp import create_app
 from pymcp.registry import prompt_registry, tool_registry
 from pymcp.runtime.dispatch import process_jsonrpc_message
 from pymcp.settings import CapabilitySettings, ServerSettings
+from tests.support import initialize_ready_session
 
 
 pytestmark = pytest.mark.anyio
-
-
-async def _initialize_session(app):
-    from pymcp.session.store import get_session_manager
-
-    manager = get_session_manager(app)
-    session = manager.create_session()
-    await process_jsonrpc_message(
-        session.session_id,
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {"protocolVersion": "2025-11-25"},
-        },
-        app=app,
-        direct_response=True,
-    )
-    await process_jsonrpc_message(
-        session.session_id,
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        app=app,
-        direct_response=True,
-    )
-    return session
-
-
 async def test_tools_list_pagination():
     for index in range(3):
 
@@ -47,7 +21,7 @@ async def test_tools_list_pagination():
             capabilities=CapabilitySettings(list_page_size=2),
         ),
     )
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     first_page = await process_jsonrpc_message(
         session.session_id,
@@ -79,7 +53,7 @@ async def test_tools_list_rejects_invalid_cursor():
         return "ok"
 
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     response = await process_jsonrpc_message(
         session.session_id,
@@ -98,7 +72,7 @@ async def test_tools_list_rejects_invalid_cursor():
 @pytest.mark.parametrize("cursor", [2, "", None])
 async def test_tools_list_rejects_non_string_or_empty_cursor(cursor):
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     response = await process_jsonrpc_message(
         session.session_id,
@@ -132,7 +106,7 @@ async def test_prompts_list_pagination():
             capabilities=CapabilitySettings(list_page_size=2),
         ),
     )
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     first_page = await process_jsonrpc_message(
         session.session_id,

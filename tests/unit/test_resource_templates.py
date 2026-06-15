@@ -5,36 +5,10 @@ from pymcp.registry import resource_registry
 from pymcp.runtime.dispatch import process_jsonrpc_message
 from pymcp.settings import CapabilitySettings, ServerSettings
 from pymcp.util.uri_template import match_uri_template
+from tests.support import initialize_ready_session
 
 
 pytestmark = pytest.mark.anyio
-
-
-async def _initialize_session(app):
-    from pymcp.session.store import get_session_manager
-
-    manager = get_session_manager(app)
-    session = manager.create_session()
-    await process_jsonrpc_message(
-        session.session_id,
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {"protocolVersion": "2025-11-25"},
-        },
-        app=app,
-        direct_response=True,
-    )
-    await process_jsonrpc_message(
-        session.session_id,
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        app=app,
-        direct_response=True,
-    )
-    return session
-
-
 def test_match_uri_template_captures_variables():
     assert match_uri_template("note://{topic}", "note://release") == {"topic": "release"}
     assert match_uri_template("file:///{path}", "file:///project/src/main.rs") == {
@@ -66,7 +40,7 @@ async def test_resources_templates_list_and_read():
         return f"Notes for {topic}"
 
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     templates = await process_jsonrpc_message(
         session.session_id,
@@ -108,7 +82,7 @@ async def test_template_uri_binding_is_not_overwritten():
         return uri
 
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
     read = await process_jsonrpc_message(
         session.session_id,
         {
@@ -137,7 +111,7 @@ async def test_resources_list_pagination():
             capabilities=CapabilitySettings(list_page_size=2),
         ),
     )
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     first_page = await process_jsonrpc_message(
         session.session_id,
@@ -169,7 +143,7 @@ async def test_resources_templates_list_rejects_invalid_cursor():
         return topic
 
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     response = await process_jsonrpc_message(
         session.session_id,
@@ -191,7 +165,7 @@ async def test_template_resource_subscription():
         return topic
 
     app = create_app(middleware_config=None)
-    session = await _initialize_session(app)
+    session = await initialize_ready_session(app)
 
     subscribe = await process_jsonrpc_message(
         session.session_id,
@@ -204,4 +178,4 @@ async def test_template_resource_subscription():
         app=app,
         direct_response=True,
     )
-    assert subscribe.payload["result"]["subscribed"] == ["note://release"]
+    assert subscribe.payload["result"] == {}

@@ -1,6 +1,7 @@
 import pytest
 
 from pymcp import create_app
+from tests.support import jsonrpc_headers
 
 
 pytestmark = pytest.mark.anyio
@@ -17,12 +18,6 @@ class StreamableHttpClient:
         self.app = app
         self.session_id: str | None = None
 
-    def _headers(self, *, accept: str = "application/json, text/event-stream") -> dict[str, str]:
-        headers = {"Accept": accept}
-        if self.session_id:
-            headers["MCP-Session-Id"] = self.session_id
-        return headers
-
     async def send_request(self, method: str, params: dict | None = None, request_id: int = 1):
         payload = {"jsonrpc": "2.0", "id": request_id, "method": method}
         if params:
@@ -31,7 +26,7 @@ class StreamableHttpClient:
         response = await self.session.post(
             "/mcp",
             json=payload,
-            headers=self._headers(),
+            headers=jsonrpc_headers(self.session_id),
             timeout=5.0,
         )
         session_id = response.headers.get("MCP-Session-Id")
@@ -47,7 +42,7 @@ class StreamableHttpClient:
         return await self.session.post(
             "/mcp",
             json=payload,
-            headers=self._headers(),
+            headers=jsonrpc_headers(self.session_id),
             timeout=5.0,
         )
 
@@ -89,7 +84,7 @@ async def test_missing_session_header_returns_400(api_client):
     response = await api_client.post(
         "/mcp",
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-        headers={"Accept": "application/json, text/event-stream"},
+        headers=jsonrpc_headers(),
         timeout=5.0,
     )
 
@@ -177,7 +172,7 @@ async def test_invalid_session_returns_404_jsonrpc_error(api_client):
 async def test_stream_requires_session_header(api_client):
     response = await api_client.get(
         "/mcp",
-        headers={"Accept": "text/event-stream"},
+        headers=jsonrpc_headers(accept="text/event-stream"),
         timeout=5.0,
     )
 
@@ -190,7 +185,7 @@ async def test_delete_closes_session(client):
 
     response = await client.session.delete(
         "/mcp",
-        headers=client._headers(),
+        headers=jsonrpc_headers(client.session_id),
         timeout=5.0,
     )
     assert response.status_code == 204
