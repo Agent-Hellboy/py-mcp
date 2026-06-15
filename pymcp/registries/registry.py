@@ -492,6 +492,36 @@ class ResourceRegistry(_RegistryBase):
             mime_type=mime_type,
             function=func,
         )
+        signature = inspect.signature(func)
+        available = set(definition._matcher.groupindex)
+        if "uri" in signature.parameters:
+            available.add("uri")
+        accepts_kwargs = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+        )
+        accepted = set(signature.parameters)
+        positional_only = sorted(
+            parameter.name
+            for parameter in signature.parameters.values()
+            if parameter.kind is inspect.Parameter.POSITIONAL_ONLY
+        )
+        required = {
+            parameter.name
+            for parameter in signature.parameters.values()
+            if parameter.kind
+            in {
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            }
+            and parameter.default is inspect.Parameter.empty
+        }
+        missing = sorted(required - available)
+        unexpected = sorted(available - accepted)
+        if positional_only or missing or (unexpected and not accepts_kwargs):
+            raise ValueError(
+                f"Template handler '{template_name}' does not match '{uri_template}': "
+                f"positional_only={positional_only}, missing={missing}, unexpected={unexpected}"
+            )
         self._templates[uri_template] = definition
         self._notify_listeners()
         return func

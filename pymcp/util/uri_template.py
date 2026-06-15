@@ -16,6 +16,8 @@ def compile_uri_template(uri_template: str) -> re.Pattern[str]:
             regex_parts.append(re.escape(parts[index]))
         else:
             name = parts[index]
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+                raise ValueError(f"Invalid variable name {name!r} in URI template {uri_template!r}")
             has_suffix = index + 1 < len(parts) and parts[index + 1]
             if has_suffix:
                 regex_parts.append(f"(?P<{name}>[^/]+)")

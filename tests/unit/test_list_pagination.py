@@ -95,6 +95,30 @@ async def test_tools_list_rejects_invalid_cursor():
     assert response.payload["error"]["code"] == -32602
 
 
+@pytest.mark.parametrize("cursor", [2, "", None])
+async def test_tools_list_rejects_non_string_or_empty_cursor(cursor):
+    app = create_app(middleware_config=None)
+    session = await _initialize_session(app)
+
+    response = await process_jsonrpc_message(
+        session.session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+            "params": {"cursor": cursor},
+        },
+        app=app,
+        direct_response=True,
+    )
+    assert response.payload["error"]["code"] == -32602
+
+
+def test_list_page_size_must_be_positive():
+    with pytest.raises(ValueError, match="positive"):
+        CapabilitySettings(list_page_size=0)
+
+
 async def test_prompts_list_pagination():
     for index in range(3):
 

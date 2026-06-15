@@ -11,14 +11,18 @@ T = TypeVar("T")
 
 def paginate_list(
     items: Sequence[T],
-    cursor: str | None,
+    cursor: object | None,
     *,
     page_size: int = 50,
 ) -> tuple[list[T], str | None, str | None]:
     """Return a page of items, an optional next cursor, or a cursor error message."""
 
+    if page_size <= 0:
+        raise ValueError("page_size must be positive")
     start = 0
-    if cursor:
+    if cursor is not None:
+        if not isinstance(cursor, str) or not cursor:
+            return [], None, "Invalid cursor"
         try:
             start = int(cursor)
         except (TypeError, ValueError):

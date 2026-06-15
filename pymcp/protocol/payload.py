@@ -173,7 +173,7 @@ class PayloadFactory:
         handler, template_params = resolved
         kwargs = dict(template_params)
         signature = inspect.signature(handler.function)
-        if "uri" in signature.parameters:
+        if "uri" in signature.parameters and "uri" not in kwargs:
             kwargs["uri"] = uri
 
         try:
