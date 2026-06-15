@@ -32,7 +32,12 @@ class CapabilitySettings:
     tasks_tool_call: bool = True
     tasks_list: bool = True
     tasks_cancel: bool = True
+    list_page_size: int = 50
     experimental_features: dict[str, JSONObject] | None = None
+
+    def __post_init__(self) -> None:
+        if self.list_page_size <= 0:
+            raise ValueError("list_page_size must be a positive integer")
 
 
 @dataclass(slots=True)

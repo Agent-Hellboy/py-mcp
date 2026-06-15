@@ -157,23 +157,26 @@ class PayloadFactory:
             },
         )
 
-    def build_resources_list(self, rpc_id: RPCId) -> JSONObject:
-        registry_manager = self._registry_manager()
-        return self.success(rpc_id, {"resources": registry_manager.resource_registry.list_payload()})
+    def build_resources_list(self, rpc_id: RPCId, resources: list[JSONObject]) -> JSONObject:
+        return self.success(rpc_id, {"resources": resources})
+
+    def build_resource_templates_list(self, rpc_id: RPCId, templates: list[JSONObject]) -> JSONObject:
+        return self.success(rpc_id, {"resourceTemplates": templates})
 
     async def build_resource_read(self, rpc_id: RPCId, uri: str) -> JSONObject:
         registry_manager = self._registry_manager()
-        resource = registry_manager.resource_registry.get(uri)
-        if resource is None:
+        resolved = registry_manager.resource_registry.resolve(uri)
+        if resolved is None:
             return self.error(rpc_id, MCPErrorCode.RESOURCE_NOT_FOUND, f"Resource not found: {uri}")
 
-        kwargs: dict[str, str] = {}
-        signature = inspect.signature(resource.function)
-        if "uri" in signature.parameters:
-            kwargs["uri"] = resource.uri
+        handler, template_params = resolved
+        kwargs = dict(template_params)
+        signature = inspect.signature(handler.function)
+        if "uri" in signature.parameters and "uri" not in kwargs:
+            kwargs["uri"] = uri
 
         try:
-            value = resource.function(**kwargs)
+            value = handler.function(**kwargs)
             if inspect.isawaitable(value):
                 value = await value
         except Exception as exc:  # pylint: disable=broad-except
@@ -189,7 +192,7 @@ class PayloadFactory:
                     "contents": [
                         {
                             "uri": uri,
-                            "mimeType": resource.mime_type,
+                            "mimeType": handler.mime_type,
                             "blob": encoded,
                         }
                     ]
@@ -201,7 +204,7 @@ class PayloadFactory:
                 "contents": [
                     {
                         "uri": uri,
-                        "mimeType": resource.mime_type,
+                        "mimeType": handler.mime_type,
                         "text": value if isinstance(value, str) else str(value),
                     }
                 ]

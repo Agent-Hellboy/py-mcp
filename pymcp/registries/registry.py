@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, ParamSpec, Sequence, TypeVar, cast, get_args, get_origin, overload
 
 from ..protocol.tool_execution import ToolExecutionConfig
+from ..util.uri_template import compile_uri_template
 
 
 JSONSchema = dict[str, Any]
@@ -215,6 +217,36 @@ class ResourceDefinition:
             "description": self.description,
             "mimeType": self.mime_type,
         }
+
+
+@dataclass(slots=True)
+class ResourceTemplateDefinition:
+    uri_template: str
+    name: str
+    description: str
+    mime_type: str
+    function: SyncOrAsyncCallable
+    _matcher: re.Pattern[str] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_matcher", compile_uri_template(self.uri_template))
+
+    def to_mcp_payload(self) -> dict[str, Any]:
+        return {
+            "uriTemplate": self.uri_template,
+            "name": self.name,
+            "description": self.description,
+            "mimeType": self.mime_type,
+        }
+
+    def match(self, uri: str) -> dict[str, str] | None:
+        match = self._matcher.match(uri)
+        if match is None:
+            return None
+        return {key: value for key, value in match.groupdict().items() if value is not None}
+
+
+ResourceHandler = ResourceDefinition | ResourceTemplateDefinition
 
 
 class _RegistryBase:
@@ -450,12 +482,14 @@ class ResourceRegistry(_RegistryBase):
     def __init__(self) -> None:
         super().__init__()
         self._resources: dict[str, ResourceDefinition] = {}
+        self._templates: dict[str, ResourceTemplateDefinition] = {}
         self._update_listeners: list[ResourceUpdatedListener] = []
 
     def clear(self) -> None:
-        if not self._resources:
+        if not self._resources and not self._templates:
             return
         self._resources.clear()
+        self._templates.clear()
         self._notify_listeners()
 
     def add_update_listener(self, listener: ResourceUpdatedListener) -> None:
@@ -503,11 +537,98 @@ class ResourceRegistry(_RegistryBase):
         self._notify_listeners()
         return func
 
+    def register_template(
+        self,
+        func: SyncOrAsyncCallable | None = None,
+        *,
+        uri_template: str,
+        name: str | None = None,
+        description: str | None = None,
+        mime_type: str = "text/plain",
+    ) -> Callable[[SyncOrAsyncCallable], SyncOrAsyncCallable] | SyncOrAsyncCallable:
+        if func is None:
+            return lambda callback: self.register_template(
+                callback,
+                uri_template=uri_template,
+                name=name,
+                description=description,
+                mime_type=mime_type,
+            )
+
+        manager = get_current_registry_manager()
+        if manager is not None and manager.resource_registry is not self:
+            return manager.resource_registry.register_template(
+                func,
+                uri_template=uri_template,
+                name=name,
+                description=description,
+                mime_type=mime_type,
+            )
+
+        template_name = name or func.__name__
+        template_description = (description if description is not None else (func.__doc__ or "")).strip()
+        definition = ResourceTemplateDefinition(
+            uri_template=uri_template,
+            name=template_name,
+            description=template_description,
+            mime_type=mime_type,
+            function=func,
+        )
+        signature = inspect.signature(func)
+        available = set(definition._matcher.groupindex)
+        if "uri" in signature.parameters:
+            available.add("uri")
+        accepts_kwargs = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+        )
+        accepted = set(signature.parameters)
+        positional_only = sorted(
+            parameter.name
+            for parameter in signature.parameters.values()
+            if parameter.kind is inspect.Parameter.POSITIONAL_ONLY
+        )
+        required = {
+            parameter.name
+            for parameter in signature.parameters.values()
+            if parameter.kind
+            in {
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            }
+            and parameter.default is inspect.Parameter.empty
+        }
+        missing = sorted(required - available)
+        unexpected = sorted(available - accepted)
+        if positional_only or missing or (unexpected and not accepts_kwargs):
+            raise ValueError(
+                f"Template handler '{template_name}' does not match '{uri_template}': "
+                f"positional_only={positional_only}, missing={missing}, unexpected={unexpected}"
+            )
+        self._templates[uri_template] = definition
+        self._notify_listeners()
+        return func
+
     def get(self, uri: str) -> ResourceDefinition | None:
         return self._resources.get(uri)
 
     def get_resource(self, uri: str) -> ResourceDefinition | None:
         return self.get(uri)
+
+    def get_template(self, uri_template: str) -> ResourceTemplateDefinition | None:
+        return self._templates.get(uri_template)
+
+    def resolve(self, uri: str) -> tuple[ResourceHandler, dict[str, str]] | None:
+        static = self._resources.get(uri)
+        if static is not None:
+            return static, {}
+        for template in self._templates.values():
+            params = template.match(uri)
+            if params is not None:
+                return template, params
+        return None
+
+    def has_uri(self, uri: str) -> bool:
+        return self.resolve(uri) is not None
 
     def definitions(self) -> dict[str, ResourceDefinition]:
         return dict(self._resources)
@@ -515,8 +636,14 @@ class ResourceRegistry(_RegistryBase):
     def import_resources(self, resources: dict[str, ResourceDefinition]) -> None:
         self._resources.update(resources)
 
+    def import_resource_templates(self, templates: dict[str, ResourceTemplateDefinition]) -> None:
+        self._templates.update(templates)
+
     def get_resources(self) -> dict[str, ResourceDefinition]:
         return dict(self._resources)
+
+    def get_templates(self) -> dict[str, ResourceTemplateDefinition]:
+        return dict(self._templates)
 
     def list_resources(self) -> list[dict[str, Any]]:
         return self.list_payload()
@@ -524,8 +651,11 @@ class ResourceRegistry(_RegistryBase):
     def list_payload(self) -> list[dict[str, Any]]:
         return [resource.to_mcp_payload() for resource in self._resources.values()]
 
+    def list_template_payload(self) -> list[dict[str, Any]]:
+        return [template.to_mcp_payload() for template in self._templates.values()]
+
     def notify_updated(self, uri: str) -> None:
-        if uri not in self._resources:
+        if not self.has_uri(uri):
             return
         _notify_update_listeners(self._update_listeners, uri)
 
@@ -553,6 +683,7 @@ class RegistryManager:
         self.tool_registry.import_tools(global_tools.definitions())
         self.prompt_registry.import_prompts(global_prompts.definitions())
         self.resource_registry.import_resources(global_resources.definitions())
+        self.resource_registry.import_resource_templates(global_resources.get_templates())
 
     def get_tool_registry(self) -> ToolRegistry:
         return self.tool_registry
@@ -603,7 +734,9 @@ __all__ = [
     "PromptRegistry",
     "RegistryManager",
     "ResourceDefinition",
+    "ResourceHandler",
     "ResourceRegistry",
+    "ResourceTemplateDefinition",
     "ResourceUpdatedListener",
     "SyncOrAsyncCallable",
     "SyncToolFunction",

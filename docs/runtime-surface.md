@@ -65,6 +65,7 @@ def addNumbersTool(a: float, b: float) -> dict:
 ### Resources
 
 - `resources/list`
+- `resources/templates/list`
 - `resources/read`
 - `resources/subscribe`
 - `resources/unsubscribe`

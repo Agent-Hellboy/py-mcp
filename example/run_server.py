@@ -133,6 +133,15 @@ def welcomeMemo() -> str:
     return "Welcome to PyMCP Kit. Use tools for actions and resources for read-only context."
 
 
+@resource_registry.register_template(
+    uri_template="note://{topic}",
+    name="topic_note",
+    description="Parameterized note resource keyed by topic.",
+)
+def topicNote(topic: str) -> str:
+    return f"Notes for topic: {topic}"
+
+
 if __name__ == "__main__":
     import sys
 
