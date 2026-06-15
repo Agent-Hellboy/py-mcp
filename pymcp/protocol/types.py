@@ -376,9 +376,17 @@ class CompletionArgument(BaseModel):
     value: str = Field(..., description="Partial argument value to complete")
 
 
+class CompletionContext(BaseModel):
+    arguments: JSONObject = Field(default_factory=dict, description="Already-resolved argument values")
+
+
 class CompleteRequestParams(BaseModel):
     ref: CompletionRef = Field(..., description="Reference to complete against")
     argument: CompletionArgument = Field(..., description="Argument to complete")
+    context: CompletionContext | None = Field(
+        default=None,
+        description="Optional context from previously resolved arguments",
+    )
 
 
 class Completion(BaseModel):
@@ -468,6 +476,7 @@ __all__ = [
     "CallToolResult",
     "CancelledNotification",
     "CancelledNotificationParams",
+    "CompletionContext",
     "CompleteRequestParams",
     "CompleteResult",
     "Completion",

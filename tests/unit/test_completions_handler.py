@@ -3,6 +3,7 @@
 import pytest
 
 from pymcp import create_app
+from pymcp.registry import prompt_registry, resource_registry
 from pymcp.runtime.dispatch import process_jsonrpc_message
 from pymcp.session.store import get_session_manager
 from pymcp.settings import CapabilitySettings, ServerSettings
@@ -19,6 +20,20 @@ async def _ready_session(app):
     return session
 
 
+async def _complete(app, session_id: str, params: dict, *, request_id: int = 1):
+    return await process_jsonrpc_message(
+        session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "completion/complete",
+            "params": params,
+        },
+        app=app,
+        direct_response=True,
+    )
+
+
 async def test_completions_gated_when_disabled():
     app = create_app(
         middleware_config=None,
@@ -28,26 +43,33 @@ async def test_completions_gated_when_disabled():
     )
     session = await _ready_session(app)
 
-    result = await process_jsonrpc_message(
+    result = await _complete(
+        app,
         session.session_id,
         {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "completion/complete",
-            "params": {
-                "ref": {"type": "ref/prompt", "name": "test"},
-                "argument": {"name": "topic", "value": "wea"},
-            },
+            "ref": {"type": "ref/prompt", "name": "test"},
+            "argument": {"name": "topic", "value": "wea"},
         },
-        app=app,
-        direct_response=True,
     )
     assert result.status == 200
     assert result.payload["error"]["code"] == -32601
     assert "completions not supported" in result.payload["error"]["message"]
 
 
-async def test_completions_returns_empty_when_enabled():
+async def test_prompt_completion_uses_enum_values():
+    @prompt_registry.register(
+        name="languagePrompt",
+        arguments=[
+            {
+                "name": "language",
+                "required": True,
+                "schema": {"type": "string", "enum": ["python", "pytorch", "pyside", "java"]},
+            }
+        ],
+    )
+    def languagePrompt(language: str) -> str:
+        return language
+
     app = create_app(
         middleware_config=None,
         server_settings=ServerSettings(
@@ -56,23 +78,73 @@ async def test_completions_returns_empty_when_enabled():
     )
     session = await _ready_session(app)
 
-    result = await process_jsonrpc_message(
+    result = await _complete(
+        app,
         session.session_id,
         {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "completion/complete",
-            "params": {
-                "ref": {"type": "ref/prompt", "name": "test"},
-                "argument": {"name": "topic", "value": "wea"},
-            },
+            "ref": {"type": "ref/prompt", "name": "languagePrompt"},
+            "argument": {"name": "language", "value": "py"},
         },
-        app=app,
-        direct_response=True,
     )
-    assert result.status == 200
     completion = result.payload["result"]["completion"]
-    assert isinstance(completion["values"], list)
+    assert completion["values"] == ["python", "pytorch", "pyside"]
+    assert completion["total"] == 3
+    assert completion["hasMore"] is False
+
+
+async def test_prompt_completion_rejects_unknown_prompt():
+    app = create_app(
+        middleware_config=None,
+        server_settings=ServerSettings(
+            capabilities=CapabilitySettings(completions_enabled=True)
+        ),
+    )
+    session = await _ready_session(app)
+
+    result = await _complete(
+        app,
+        session.session_id,
+        {
+            "ref": {"type": "ref/prompt", "name": "missingPrompt"},
+            "argument": {"name": "topic", "value": "wea"},
+        },
+    )
+    assert result.payload["error"]["code"] == -32602
+    assert "Unknown prompt" in result.payload["error"]["message"]
+
+
+async def test_resource_template_completion_uses_variable_metadata():
+    @resource_registry.register_template(
+        uri_template="memo://{topic}",
+        name="memo_template",
+        variables={
+            "topic": {
+                "completion": ["welcome", "release-notes", "security"],
+            }
+        },
+    )
+    def memoTemplate(topic: str) -> str:
+        return topic
+
+    app = create_app(
+        middleware_config=None,
+        server_settings=ServerSettings(
+            capabilities=CapabilitySettings(completions_enabled=True)
+        ),
+    )
+    session = await _ready_session(app)
+
+    result = await _complete(
+        app,
+        session.session_id,
+        {
+            "ref": {"type": "ref/resource", "uri": "memo://{topic}"},
+            "argument": {"name": "topic", "value": "re"},
+        },
+    )
+    completion = result.payload["result"]["completion"]
+    assert completion["values"] == ["release-notes"]
+    assert completion["total"] == 1
     assert completion["hasMore"] is False
 
 
@@ -85,16 +157,10 @@ async def test_completions_rejects_missing_ref():
     )
     session = await _ready_session(app)
 
-    result = await process_jsonrpc_message(
+    result = await _complete(
+        app,
         session.session_id,
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "completion/complete",
-            "params": {"argument": {"name": "topic", "value": "wea"}},
-        },
-        app=app,
-        direct_response=True,
+        {"argument": {"name": "topic", "value": "wea"}},
     )
     assert result.payload["error"]["code"] == -32602
 
@@ -108,15 +174,9 @@ async def test_completions_rejects_missing_argument():
     )
     session = await _ready_session(app)
 
-    result = await process_jsonrpc_message(
+    result = await _complete(
+        app,
         session.session_id,
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "completion/complete",
-            "params": {"ref": {"type": "ref/prompt", "name": "test"}},
-        },
-        app=app,
-        direct_response=True,
+        {"ref": {"type": "ref/prompt", "name": "test"}},
     )
     assert result.payload["error"]["code"] == -32602

@@ -82,6 +82,31 @@ via the `request_roots_list()` helper (sends `roots/list` to the client).
 
 - `completion/complete`
 
+Prompt argument completions are resolved from each argument's `schema.enum` or
+explicit `completion` list. Resource template variable completions are resolved
+from optional `variables` metadata passed to `register_template()`.
+
+```python
+@prompt_registry.register(
+    arguments=[
+        {
+            "name": "language",
+            "required": True,
+            "schema": {"type": "string", "enum": ["python", "javascript", "rust"]},
+        }
+    ]
+)
+def languagePrompt(language: str) -> str:
+    return language
+
+@resource_registry.register_template(
+    uri_template="memo://{topic}",
+    variables={"topic": {"completion": ["welcome", "release-notes"]}},
+)
+def memoTemplate(topic: str) -> str:
+    return topic
+```
+
 ### Tasks
 
 - `tasks/list`
